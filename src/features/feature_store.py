@@ -97,6 +97,10 @@ class FeatureStore:
         if current_date < end_date:
             missing_ranges.append((current_date, end_date))
         
+        # If we have no missing ranges, return empty list
+        if not missing_ranges:
+            return []
+            
         return missing_ranges
     
     def get_cached_features(
@@ -164,9 +168,11 @@ class FeatureStore:
         
         # Filter for requested features
         if features is not None:
+            # Check which features are available
             available_features = [f for f in features if f in result.columns]
             if not available_features:
                 return None
+            # Only keep the requested features that are available
             result = result[available_features]
         
         return result
