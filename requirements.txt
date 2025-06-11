@@ -6,7 +6,7 @@ pyarrow==20.0.0  # For faster parquet operations
 # Data fetching
 yfinance==0.2.62  # Latest stable version
 requests==2.31.0  # Required by yfinance
-certifi>=2022.5.18,<2024.0.0  # Compatible with polygon-api-client
+certifi>=2024.2.2  # Updated to resolve conflicts
 
 # Machine Learning
 scikit-learn==1.6.1
