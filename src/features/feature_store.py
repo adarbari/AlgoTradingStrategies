@@ -78,15 +78,22 @@ class FeatureStore:
             _, file_start, file_end = self._parse_cache_filename(file)
             cache_ranges.append((file_start, file_end))
         
+        # Sort ranges by start date
+        cache_ranges.sort(key=lambda x: x[0])
+        
         # Find missing ranges
         missing_ranges = []
         current_date = start_date
         
-        for cache_start, cache_end in sorted(cache_ranges):
+        for cache_start, cache_end in cache_ranges:
+            # If current date is before this cache range starts
             if current_date < cache_start:
+                # Add the gap as a missing range
                 missing_ranges.append((current_date, cache_start))
+            # Update current date to the end of this cache range
             current_date = max(current_date, cache_end)
         
+        # If we haven't covered the entire requested range
         if current_date < end_date:
             missing_ranges.append((current_date, end_date))
         
@@ -151,9 +158,16 @@ class FeatureStore:
         # Remove duplicates (in case of overlapping cache files)
         result = result[~result.index.duplicated(keep='first')]
         
+        # Ensure we have data for the entire requested range
+        if result.index.min() > start_dt or result.index.max() < end_dt:
+            return None
+        
         # Filter for requested features
         if features is not None:
-            result = result[features]
+            available_features = [f for f in features if f in result.columns]
+            if not available_features:
+                return None
+            result = result[available_features]
         
         return result
     
