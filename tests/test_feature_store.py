@@ -1,3 +1,7 @@
+"""
+Tests for the FeatureStore class.
+"""
+
 import unittest
 import pandas as pd
 import numpy as np

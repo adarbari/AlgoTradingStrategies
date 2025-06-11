@@ -131,15 +131,19 @@ class FeatureStore:
         start_dt = datetime.strptime(start_date, '%Y-%m-%d')
         end_dt = datetime.strptime(end_date, '%Y-%m-%d')
         
+        print(f"Looking for cache files in {self.cache_dir}")
+        cache_files = self._get_cache_files(symbol)
+        print(f"Found cache files: {cache_files}")
+        
         # Find missing date ranges
         missing_ranges = self._find_missing_date_ranges(symbol, start_dt, end_dt)
+        print(f"Missing date ranges: {missing_ranges}")
         
         # If we have missing ranges, return None to trigger recalculation
         if missing_ranges:
             return None
         
         # Get all relevant cache files
-        cache_files = self._get_cache_files(symbol)
         if not cache_files:
             return None
         
@@ -148,13 +152,18 @@ class FeatureStore:
         for file in cache_files:
             try:
                 _, file_start, file_end = self._parse_cache_filename(file)
-                if (file_start <= end_dt and file_end >= start_dt):
+                print(f"Checking cache file: {file}")
+                print(f"File date range: {file_start} to {file_end}")
+                # Compare dates without time components
+                if (file_start.date() <= end_dt.date() and file_end.date() >= start_dt.date()):
                     cached_data = joblib.load(file)
+                    print(f"Loaded data with columns: {cached_data.columns.tolist()}")
                     # Filter for requested date range
-                    mask = (cached_data.index >= start_dt) & (cached_data.index <= end_dt)
+                    mask = (cached_data.index.date >= start_dt.date()) & (cached_data.index.date <= end_dt.date())
                     filtered_data = cached_data[mask]
                     if not filtered_data.empty:
                         combined_data.append(filtered_data)
+                        print(f"Added data from {file}")
             except Exception as e:
                 print(f"Error loading cache file {file}: {e}")
                 continue
@@ -170,7 +179,8 @@ class FeatureStore:
         result = result[~result.index.duplicated(keep='first')]
         
         # Ensure we have data for the entire requested range
-        if result.index.min() > start_dt or result.index.max() < end_dt:
+        if result.index.date.min() > start_dt.date() or result.index.date.max() < end_dt.date():
+            print(f"Data range mismatch: got {result.index.date.min()} to {result.index.date.max()}, need {start_dt.date()} to {end_dt.date()}")
             return None
         
         # Filter for requested features
@@ -178,11 +188,13 @@ class FeatureStore:
             # Check which features are available
             available_features = [f for f in features if f in result.columns]
             if not available_features:
+                print(f"No requested features available. Requested: {features}, Available: {result.columns.tolist()}")
                 return None
             # Only keep the requested features that are available
             result = result[available_features]
             # Verify we have all requested features
             if set(features) != set(available_features):
+                print(f"Missing some requested features. Requested: {features}, Available: {available_features}")
                 return None
         
         return result

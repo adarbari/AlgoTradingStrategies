@@ -1,0 +1,10 @@
+{
+  "rules": [
+    {
+      "name": "Use data/vendor layer for data fetching",
+      "description": "Always use the data/vendor layer (e.g., polygon.io) for fetching market data instead of direct calls to yfinance or other data sources.",
+      "pattern": "import yfinance as yf",
+      "message": "Direct use of yfinance is not allowed. Please use the data/vendor layer for data fetching."
+    }
+  ]
+} 

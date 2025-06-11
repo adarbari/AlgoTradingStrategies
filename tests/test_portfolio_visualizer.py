@@ -59,37 +59,36 @@ def sample_strategy_results():
         }
     ]
 
+@pytest.mark.slow
 def test_plot_portfolio_performance(sample_portfolio_data):
     """Test plotting portfolio performance."""
     # Test basic plotting
-    plot_portfolio_performance(
-        symbol='AAPL',
-        portfolio_values=sample_portfolio_data
-    )
+    plot_portfolio_performance('AAPL', sample_portfolio_data)
 
-def test_plot_trade_distribution(sample_trades_data):
+@pytest.mark.slow
+def test_plot_trade_distribution():
     """Test plotting trade distribution."""
-    # Test basic plotting
-    plot_trade_distribution(
-        symbol='AAPL',
-        trades=sample_trades_data
-    )
+    # Create a mock trades DataFrame with required columns
+    trades = pd.DataFrame({
+        'profit': [10, -5, 20, 0, 15],
+        'shares': [100, 50, 200, 150, 120],
+        'cumulative_profit': [10, 5, 25, 25, 40],
+        'win': [True, False, True, False, True],
+        'win_rate': [1.0, 0.5, 0.67, 0.5, 0.6]
+    })
+    plot_trade_distribution('AAPL', trades)
 
+@pytest.mark.slow
 def test_plot_backtest_results(sample_backtest_data):
     """Test plotting backtest results."""
     # Test basic plotting
-    plot_backtest_results(
-        symbol='AAPL',
-        df=sample_backtest_data
-    )
+    plot_backtest_results('AAPL', sample_backtest_data)
 
+@pytest.mark.slow
 def test_plot_strategy_comparison(sample_strategy_results):
     """Test plotting strategy comparison."""
     # Test basic plotting
-    plot_strategy_comparison(
-        symbol='AAPL',
-        results=sample_strategy_results
-    )
+    plot_strategy_comparison('AAPL', sample_strategy_results)
 
 def test_plot_portfolio_performance_invalid_inputs():
     """Test error handling for invalid inputs."""

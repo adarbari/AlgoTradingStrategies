@@ -1,11 +1,11 @@
 """
-Single stock trading strategy implementation.
+Single stock trading strategies package.
 """
 
-from .random_forest_strategy import RandomForestSingleStockStrategy
-from .ma_crossover_strategy import MACrossOverSingleStockStrategy
+from src.strategies.SingleStock.ma_crossover_strategy import MACrossoverStrategy
+from src.strategies.SingleStock.random_forest_strategy import RandomForestStrategy
 
 __all__ = [
-    'RandomForestSingleStockStrategy',
-    'MACrossOverSingleStockStrategy',
+    'MACrossoverStrategy',
+    'RandomForestStrategy'
 ] 
