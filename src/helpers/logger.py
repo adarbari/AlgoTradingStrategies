@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from typing import Dict, Optional
 import json
+import numpy as np
 
 class TradingLogger:
     def __init__(self, run_dir: Optional[str] = None):
@@ -31,15 +32,26 @@ class TradingLogger:
         )
         
     def log_trade(self, symbol: str, trade_type: str, price: float, shares: float, 
-                 timestamp: datetime, profit: Optional[float] = None):
-        """Log a trade"""
+                 timestamp: datetime, profit: Optional[float] = None, 
+                 portfolio_value: Optional[float] = None):
+        """Log a trade with detailed information"""
+        # Convert timestamp to string if it's a pandas Timestamp or datetime
+        if hasattr(timestamp, 'isoformat'):
+            ts_str = timestamp.isoformat()
+        else:
+            ts_str = str(timestamp)
+        def safe_float(val):
+            return float(val) if pd.notnull(val) else None
+        def safe_int(val, default=0):
+            return int(val) if pd.notnull(val) else default
         trade_info = {
             "symbol": symbol,
             "type": trade_type,
-            "price": price,
-            "shares": shares,
-            "timestamp": timestamp.isoformat(),
-            "profit": profit
+            "price": safe_float(price),
+            "shares": safe_int(shares),
+            "timestamp": ts_str,
+            "profit": safe_float(profit),
+            "portfolio_value": safe_float(portfolio_value)
         }
         
         # Log to file
@@ -50,23 +62,51 @@ class TradingLogger:
         trade_df = pd.DataFrame([trade_info])
         trade_df.to_csv(trades_file, mode='a', header=not os.path.exists(trades_file), index=False)
         
-        # Ensure portfolio value is logged for this timestamp
-        if self.last_timestamp != timestamp:
-            self.last_timestamp = timestamp
-            # Read the last portfolio value
-            values_file = os.path.join(self.run_dir, "logs", "portfolio_values.csv")
-            if os.path.exists(values_file):
-                portfolio_values = pd.read_csv(values_file)
-                if not portfolio_values.empty:
-                    last_value = portfolio_values.iloc[-1]['portfolio_value']
-                    self.log_portfolio_value(symbol, timestamp, last_value)
+    def log_period(self, symbol: str, timestamp: datetime, data: Dict):
+        """Log period information (e.g., OHLCV, indicators, signals)"""
+        # Convert timestamp to string if it's a pandas Timestamp or datetime
+        if hasattr(timestamp, 'isoformat'):
+            ts_str = timestamp.isoformat()
+        else:
+            ts_str = str(timestamp)
+        def safe_float(val):
+            return float(val) if pd.notnull(val) else None
+        def safe_int(val, default=0):
+            return int(val) if pd.notnull(val) else default
+        period_data = {
+            'symbol': symbol,
+            'timestamp': ts_str,
+            'open': safe_float(data.get('open')),
+            'high': safe_float(data.get('high')),
+            'low': safe_float(data.get('low')),
+            'close': safe_float(data.get('close')),
+            'volume': safe_int(data.get('volume'), default=0),
+            'signal': safe_int(data.get('signal'), default=0),
+            'returns': safe_float(data.get('returns')),
+            'strategy_returns': safe_float(data.get('strategy_returns'))
+        }
+        
+        # Log to file
+        self.logger.info(f"Period: {json.dumps(period_data)}")
+        
+        # Append to periods CSV
+        periods_file = os.path.join(self.run_dir, "logs", "periods.csv")
+        period_df = pd.DataFrame([period_data])
+        period_df.to_csv(periods_file, mode='a', header=not os.path.exists(periods_file), index=False)
         
     def log_portfolio_value(self, symbol: str, timestamp: datetime, portfolio_value: float):
         """Log portfolio value"""
+        # Convert timestamp to string if it's a pandas Timestamp or datetime
+        if hasattr(timestamp, 'isoformat'):
+            ts_str = timestamp.isoformat()
+        else:
+            ts_str = str(timestamp)
+        def safe_float(val):
+            return float(val) if pd.notnull(val) else None
         value_info = {
             "symbol": symbol,
-            "timestamp": timestamp.isoformat(),
-            "portfolio_value": portfolio_value
+            "timestamp": ts_str,
+            "portfolio_value": safe_float(portfolio_value)
         }
         
         # Log to file
@@ -82,7 +122,7 @@ class TradingLogger:
     def plot_portfolio_performance(self, symbol: str, portfolio_values: pd.DataFrame):
         """Plot portfolio performance"""
         plt.figure(figsize=(12, 6))
-        plt.plot(portfolio_values.index, portfolio_values['Portfolio_Value'])
+        plt.plot(portfolio_values.index, portfolio_values['portfolio_value'])
         plt.title(f"Portfolio Performance - {symbol}")
         plt.xlabel("Date")
         plt.ylabel("Portfolio Value ($)")
@@ -96,8 +136,7 @@ class TradingLogger:
     def plot_trade_distribution(self, symbol: str, trades: pd.DataFrame):
         """Plot trade distribution"""
         plt.figure(figsize=(10, 6))
-        # Use the correct column for profit
-        profit_col = 'Trade_Profit' if 'Trade_Profit' in trades.columns else 'profit'
+        profit_col = 'profit'
         sns.histplot(data=trades, x=profit_col, bins=30)
         plt.title(f"Trade Profit Distribution - {symbol}")
         plt.xlabel("Profit ($)")
@@ -112,16 +151,9 @@ class TradingLogger:
     def generate_performance_report(self, symbol: str, trades: pd.DataFrame, 
                                   portfolio_values: pd.DataFrame) -> Dict:
         """Generate performance report"""
-        # Use the correct column for profit
-        profit_col = 'Trade_Profit' if 'Trade_Profit' in trades.columns else 'profit'
-        # Find the correct portfolio value column
-        if 'portfolio_value' in portfolio_values.columns:
-            pv_col = 'portfolio_value'
-        elif 'Portfolio_Value' in portfolio_values.columns:
-            pv_col = 'Portfolio_Value'
-        else:
-            print(f"[ERROR] Portfolio values columns: {portfolio_values.columns.tolist()}")
-            raise KeyError("'portfolio_value' column not found in portfolio_values DataFrame. Available columns: " + str(portfolio_values.columns.tolist()))
+        profit_col = 'profit'
+        pv_col = 'portfolio_value'
+        
         report = {
             "symbol": symbol,
             "total_trades": len(trades),
