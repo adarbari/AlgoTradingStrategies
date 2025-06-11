@@ -34,18 +34,20 @@ class TestFeatureStore(unittest.TestCase):
     def test_cache_and_retrieve_full_range(self):
         """Test caching and retrieving features for a full date range."""
         # Cache the features
+        start_date = self.sample_features.index.min().strftime('%Y-%m-%d')
+        end_date = self.sample_features.index.max().strftime('%Y-%m-%d')
         self.feature_store.cache_features(
             symbol='AAPL',
-            start_date='2024-01-01',
-            end_date='2024-04-10',
+            start_date=start_date,
+            end_date=end_date,
             features_df=self.sample_features
         )
         
         # Retrieve the features
         retrieved_features = self.feature_store.get_cached_features(
             symbol='AAPL',
-            start_date='2024-01-01',
-            end_date='2024-04-10'
+            start_date=start_date,
+            end_date=end_date
         )
         
         self.assertIsNotNone(retrieved_features)
@@ -126,18 +128,20 @@ class TestFeatureStore(unittest.TestCase):
     def test_specific_features_retrieval(self):
         """Test retrieving specific features only."""
         # Cache the features
+        start_date = self.sample_features.index.min().strftime('%Y-%m-%d')
+        end_date = self.sample_features.index.max().strftime('%Y-%m-%d')
         self.feature_store.cache_features(
             symbol='AAPL',
-            start_date='2024-01-01',
-            end_date='2024-04-10',
+            start_date=start_date,
+            end_date=end_date,
             features_df=self.sample_features
         )
         
         # Retrieve only RSI and MACD
         retrieved_features = self.feature_store.get_cached_features(
             symbol='AAPL',
-            start_date='2024-01-01',
-            end_date='2024-04-10',
+            start_date=start_date,
+            end_date=end_date,
             features=['RSI', 'MACD']
         )
         

@@ -26,7 +26,7 @@ class YahooFinanceProvider(DataProvider):
                 end_date=end_date
             )
             if cached_data is not None:
-                return cached_data
+                return self._process_historical_data(cached_data)
         
         # Fetch from API if not in cache
         ticker = yf.Ticker(symbol)
@@ -89,13 +89,8 @@ class YahooFinanceProvider(DataProvider):
         # Ensure index is datetime
         if not isinstance(df.index, pd.DatetimeIndex):
             df.index = pd.to_datetime(df.index)
-        
-        # Ensure timezone is UTC
-        if df.index.tz is None:
-            df.index = df.index.tz_localize('UTC')
-        elif df.index.tz != 'UTC':
-            df.index = df.index.tz_convert('UTC')
-        
+        # Always convert to UTC
+        df.index = df.index.tz_convert('UTC') if df.index.tz else df.index.tz_localize('UTC')
         # Rename columns to lowercase
         df.columns = [col.lower() for col in df.columns]
         
