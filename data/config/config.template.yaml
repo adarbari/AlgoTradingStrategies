@@ -1,0 +1,39 @@
+# Trading Strategy Configuration Template
+
+# Data Source Configuration
+data_source:
+  type: "yfinance"  # or "alpha_vantage", "iex", etc.
+  cache_dir: "data_cache"
+  update_interval: 300  # seconds
+
+# Trading Parameters
+trading:
+  initial_capital: 10000
+  commission: 0.001  # 0.1%
+  slippage: 0.0005  # 0.05%
+  position_size: 0.1  # 10% of portfolio per trade
+
+# Strategy Parameters
+strategy:
+  ml:
+    model_type: "random_forest"
+    features:
+      - "rsi"
+      - "macd"
+      - "bollinger_bands"
+    target: "returns"
+    train_size: 0.7
+    validation_size: 0.15
+    test_size: 0.15
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  file: "logs/trading.log"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# API Keys (DO NOT COMMIT ACTUAL KEYS)
+api_keys:
+  alpha_vantage: "YOUR_API_KEY"
+  iex: "YOUR_API_KEY"
+  polygon: "YOUR_API_KEY" 
