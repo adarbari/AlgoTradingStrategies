@@ -1,14 +1,14 @@
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Optional
 import pandas as pd
 import yfinance as yf
-from ..base import DataProvider
+from ..base import DataProvider, DataCache
 
 class YahooFinanceProvider(DataProvider):
     """Yahoo Finance data provider implementation."""
     
-    def __init__(self):
+    def __init__(self, cache: Optional[DataCache] = None):
         """Initialize the Yahoo Finance provider."""
-        self._cache = {}
+        super().__init__(cache=cache)
     
     def get_historical_data(
         self,
@@ -18,8 +18,29 @@ class YahooFinanceProvider(DataProvider):
         interval: str = '1d'
     ) -> pd.DataFrame:
         """Fetch historical data from Yahoo Finance."""
+        # Try to get from cache first
+        if self.cache:
+            cached_data = self.cache.get_cached_data(
+                symbol=symbol,
+                start_date=start_date,
+                end_date=end_date
+            )
+            if cached_data is not None:
+                return cached_data
+        
+        # Fetch from API if not in cache
         ticker = yf.Ticker(symbol)
         df = ticker.history(start=start_date, end=end_date, interval=interval)
+        
+        # Cache the data
+        if self.cache:
+            self.cache.cache_data(
+                symbol=symbol,
+                start_date=start_date,
+                end_date=end_date,
+                data=df
+            )
+        
         return self._process_historical_data(df)
     
     def get_realtime_data(

@@ -1,16 +1,17 @@
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Optional
 import os
 import pandas as pd
 from datetime import datetime
 from polygon import RESTClient
-from ..base import DataProvider
+from ..base import DataProvider, DataCache
 
 class PolygonProvider(DataProvider):
     """Polygon.io data provider implementation."""
-    def __init__(self, api_key: str = None):
+    def __init__(self, api_key: str = None, cache: Optional[DataCache] = None):
         # Always use the working API key
         api_key = "rD9rEIzrzJOcVlPq1ttiAyRLyZyquFiF"
         self.client = RESTClient(api_key)
+        super().__init__(cache=cache)
         self._cache_dir = 'data_cache'
         os.makedirs(self._cache_dir, exist_ok=True)
 
@@ -32,12 +33,18 @@ class PolygonProvider(DataProvider):
             start_date = pd.to_datetime(start_date)
         if isinstance(end_date, str):
             end_date = pd.to_datetime(end_date)
-        cache_file = os.path.join(self._cache_dir, f"{symbol}_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.csv")
-        if os.path.exists(cache_file):
-            df = pd.read_csv(cache_file, parse_dates=['Date'])
-            df.set_index('Date', inplace=True)
-            df = df[(df.index >= start_date) & (df.index <= end_date)]
-            return self._normalize_columns(df)
+            
+        # Try to get from cache first
+        if self.cache:
+            cached_data = self.cache.get_cached_data(
+                symbol=symbol,
+                start_date=start_date.strftime('%Y-%m-%d'),
+                end_date=end_date.strftime('%Y-%m-%d')
+            )
+            if cached_data is not None:
+                return cached_data
+        
+        # Fetch from API if not in cache
         aggs = self.client.list_aggs(
             ticker=symbol,
             multiplier=5,
@@ -46,9 +53,10 @@ class PolygonProvider(DataProvider):
             to=end_date.strftime('%Y-%m-%d'),
             limit=50000
         )
-        print(f"DEBUG: Polygon aggs response for {symbol}: {aggs}")
+        
         if not aggs:
             return pd.DataFrame()
+            
         df = pd.DataFrame([{
             'Date': pd.to_datetime(agg.timestamp, unit='ms'),
             'open': agg.open,
@@ -57,9 +65,19 @@ class PolygonProvider(DataProvider):
             'close': agg.close,
             'volume': agg.volume
         } for agg in aggs])
+        
         df.set_index('Date', inplace=True)
         df = df[(df.index >= start_date) & (df.index <= end_date)]
-        df.to_csv(cache_file)
+        
+        # Cache the data
+        if self.cache:
+            self.cache.cache_data(
+                symbol=symbol,
+                start_date=start_date.strftime('%Y-%m-%d'),
+                end_date=end_date.strftime('%Y-%m-%d'),
+                data=df
+            )
+        
         return df
 
     def get_realtime_data(
