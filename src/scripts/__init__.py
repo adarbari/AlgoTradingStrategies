@@ -1,6 +1,5 @@
 """
-Scripts package.
-Contains executable scripts for running backtests and comparing results.
+Scripts for running and testing the trading system.
 """
 
 from .backtest import backtest_strategy, compare_strategies, plot_results

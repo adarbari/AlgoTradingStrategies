@@ -1,6 +1,5 @@
 """
-Helpers package.
-Contains utility and helper functions/classes used across the application.
+Helper utilities for the trading system.
 """
 
 from .run_manager import RunManager
