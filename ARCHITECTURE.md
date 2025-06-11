@@ -1,0 +1,53 @@
+# Project Architecture and Guidelines
+
+## Overview
+This document outlines the structure, architecture, and philosophies of the AlgoTradingModels project. It aims to prevent duplicate files, ensure clear separation of concerns, and maintain a clean, maintainable codebase.
+
+## Project Structure
+```
+AlgoTradingModels/
+├── src/                    # Source code
+│   ├── data/               # Data fetching, processing, and caching
+│   │   ├── vendors/        # Data providers (e.g., Polygon, Yahoo Finance)
+│   │   └── feature_store.py # Feature caching and retrieval
+│   ├── features/           # Feature engineering and technical indicators
+│   ├── strategies/         # Trading strategies
+│   │   └── SingleStock/    # Single stock strategy implementation
+│   ├── helpers/            # Utility functions and helpers
+│   └── scripts/            # Executable scripts (e.g., run_strategy.py)
+├── tests/                  # Unit and integration tests
+├── logs/                   # Logs and results
+├── setup.py                # Package setup
+└── README.md               # Project documentation
+```
+
+## Key Philosophies
+
+### 1. **Single Responsibility Principle**
+- Each module or class should have only one reason to change.
+- Avoid merging different concerns in a single layer (e.g., data fetching, feature engineering, and strategy logic should be separate).
+
+### 2. **Avoid Duplicate Files**
+- Do not create duplicate files. If a file exists in one location, do not create it elsewhere.
+- Use relative imports to reference modules within the project.
+
+### 3. **Clear Separation of Concerns**
+- **Data Layer**: Responsible for fetching, processing, and caching data. Do not mix data fetching with feature engineering or strategy logic.
+- **Feature Layer**: Focus on feature engineering and technical indicators. Do not include data fetching or strategy logic here.
+- **Strategy Layer**: Implement trading strategies. Do not include data fetching or feature engineering here.
+- **Helper Layer**: Provide utility functions and helpers. Do not include business logic here.
+
+### 4. **Consistent Naming and Structure**
+- Use consistent naming conventions (e.g., snake_case for files and functions, CamelCase for classes).
+- Follow the project structure outlined above. Do not create files or directories outside this structure.
+
+### 5. **Testing and Documentation**
+- Write unit tests for all modules and functions.
+- Document code clearly, including docstrings and comments where necessary.
+
+### 6. **Version Control**
+- Use Git for version control. Commit changes with clear, descriptive messages.
+- Avoid committing unnecessary files (e.g., logs, cache files, virtual environment).
+
+## Conclusion
+Following these guidelines will help maintain a clean, maintainable, and scalable codebase. If you have any questions or suggestions, please raise them in the project discussions. 
