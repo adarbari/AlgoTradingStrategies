@@ -54,6 +54,15 @@ def main():
             logger.error("No signals generated")
             return
 
+        # Calculate returns
+        signals['returns'] = signals['close'].pct_change().fillna(0)
+        signals['strategy_returns'] = signals['returns'] * signals['signal'].shift(1).fillna(0)
+        cumulative_returns = (1 + signals['strategy_returns']).cumprod()
+        
+        # Display returns
+        print(f"Cumulative Returns: {cumulative_returns.iloc[-1]:.2f}")
+        print(f"Total Returns: {cumulative_returns.iloc[-1] - 1:.2%}")
+
         # Log results
         logger.info("\nStrategy Results:")
         logger.info(f"Total trades: {len(signals[signals['signal'] != 0])}")
