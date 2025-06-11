@@ -4,6 +4,7 @@ import logging
 from src.data.vendors.polygon_provider import PolygonProvider
 from src.strategies.SingleStock.single_stock_strategy import SingleStockStrategy
 from src.utils.run_manager import RunManager
+import os
 
 def main():
     parser = argparse.ArgumentParser(description='Run trading strategy')
@@ -15,7 +16,9 @@ def main():
     args = parser.parse_args()
 
     # Set up logging
-    logging.basicConfig(level=logging.INFO)
+    log_dir = 'logs'
+    os.makedirs(log_dir, exist_ok=True)
+    logging.basicConfig(filename=os.path.join(log_dir, 'run_strategy.log'), level=logging.INFO)
     logger = logging.getLogger(__name__)
 
     try:
@@ -62,7 +65,7 @@ def main():
             logger.info(f"Total profit: ${total_profit:.2f}")
 
         # Save results
-        output_file = f"results_{args.symbol}_{args.strategy}_{args.start_date}_{args.end_date}.csv"
+        output_file = os.path.join(log_dir, f"results_{args.symbol}_{args.strategy}_{args.start_date}_{args.end_date}.csv")
         signals.to_csv(output_file)
         logger.info(f"Results saved to {output_file}")
 

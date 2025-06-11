@@ -89,12 +89,19 @@ class SingleStockStrategy:
         X = data[self.feature_columns].copy()
         y = data['target'].copy()
         
+        # Log data types and structures
+        logging.info(f"Training data type: {type(X)}")
+        logging.info(f"Training data columns: {X.columns.tolist()}")
+        
         # Split data
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
         
         # Scale features
-        X_train_scaled = self.scaler.fit_transform(X_train)
-        X_test_scaled = self.scaler.transform(X_test)
+        X_train_scaled = pd.DataFrame(self.scaler.fit_transform(X_train), columns=X_train.columns)
+        X_test_scaled = pd.DataFrame(self.scaler.transform(X_test), columns=X_test.columns)
+        
+        # Log scaled data types and structures
+        logging.info(f"Scaled training data type: {type(X_train_scaled)}")
         
         # Train model
         self.model.fit(X_train_scaled, y_train)
@@ -145,8 +152,13 @@ class SingleStockStrategy:
             if not self.is_trained:
                 self.train_model(signals, run_manager, symbol)
             
+            # Ensure the input data for prediction is a DataFrame with feature names
+            X_pred = signals[self.feature_columns]
+            # Log data types and structures
+            logging.info(f"Prediction data type: {type(X_pred)}")
+            logging.info(f"Prediction data columns: {X_pred.columns.tolist()}")
             # Generate predictions
-            signals['prediction'] = self.model.predict(signals[self.feature_columns])
+            signals['prediction'] = self.model.predict(X_pred)
             signals['signal'] = signals['prediction'].map({1: 1, 0: -1})
         else:
             # Non-ML mode: use moving average crossover

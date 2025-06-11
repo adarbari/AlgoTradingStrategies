@@ -46,6 +46,16 @@ You can modify the following parameters in the code:
 - Date range for backtesting
 - Visualization settings 
 
+## Running the Strategy
+
+To run the strategy and generate results, use the following command:
+
+```bash
+python3 src/scripts/run_strategy.py --symbol AAPL --strategy ml --start-date 2024-01-01 --end-date 2024-04-10
+```
+
+This script will execute the strategy and save the results in the `results` directory.
+
 # AlgoTradingModels
 
 This project contains algorithmic trading models and strategies.

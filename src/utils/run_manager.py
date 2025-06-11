@@ -8,21 +8,16 @@ import os
 class RunManager:
     """Manages the execution and logging of strategy runs."""
     
-    def __init__(self, log_dir: str = 'logs'):
-        """Initialize the run manager.
-        
-        Args:
-            log_dir: Directory to store logs
-        """
-        self.log_dir = log_dir
-        os.makedirs(log_dir, exist_ok=True)
+    def __init__(self):
+        self.log_dir = 'logs'
+        os.makedirs(self.log_dir, exist_ok=True)
         
         # Set up logging
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.INFO)
         
         # Create file handler
-        log_file = os.path.join(log_dir, f'strategy_run_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
+        log_file = os.path.join(self.log_dir, f'strategy_run_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
         file_handler = logging.FileHandler(log_file)
         file_handler.setLevel(logging.INFO)
         
@@ -196,4 +191,9 @@ class RunManager:
             portfolio_df = pd.DataFrame(portfolio_values)
             portfolio_file = os.path.join(self.log_dir, f"portfolio_{symbol}_{timestamp}.csv")
             portfolio_df.to_csv(portfolio_file, index=False)
-            self.logger.info(f"Portfolio values log saved to {portfolio_file}") 
+            self.logger.info(f"Portfolio values log saved to {portfolio_file}")
+
+        # Save trades and portfolio logs in the logs directory
+        trades_log_file = os.path.join(self.log_dir, f"{symbol}_trades.log")
+        portfolio_log_file = os.path.join(self.log_dir, f"{symbol}_portfolio.log")
+        # Logic to save logs to trades_log_file and portfolio_log_file 
