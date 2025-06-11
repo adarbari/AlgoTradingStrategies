@@ -32,7 +32,11 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y graphviz
+        sudo apt-get install -y --no-install-recommends \
+          graphviz \
+          libgraphviz-dev \
+          pkg-config \
+          && sudo rm -rf /var/lib/apt/lists/*
         
     - name: Install Python dependencies
       run: |
