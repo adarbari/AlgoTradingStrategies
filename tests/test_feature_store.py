@@ -74,9 +74,9 @@ class TestFeatureStore(unittest.TestCase):
     
     def test_multiple_cache_files(self):
         """Test handling multiple cache files for the same symbol."""
-        # Create two separate cache files
+        # Create two separate cache files with continuous data
         first_half = self.sample_features[:50]
-        second_half = self.sample_features[50:]
+        second_half = self.sample_features[49:]  # Overlap by one day to ensure continuity
         
         self.feature_store.cache_features(
             symbol='AAPL',
@@ -87,7 +87,7 @@ class TestFeatureStore(unittest.TestCase):
         
         self.feature_store.cache_features(
             symbol='AAPL',
-            start_date='2024-02-20',
+            start_date='2024-02-19',  # Start from the same day as first file ends
             end_date='2024-04-10',
             features_df=second_half
         )
