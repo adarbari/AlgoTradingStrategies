@@ -2,20 +2,25 @@
 Main script to run the trading system.
 """
 
+import os
+import sys
+# Add the project root directory to the Python path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(project_root)
+
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import pandas as pd
 from src.execution.portfolio_manager import PortfolioManager
-from src.execution.trade_decider import TradeDecider, StrategySignal
-from src.execution.trade_executor import TradeExecutor, Trade
-from src.risk.risk_manager import RiskManager
-from src.strategies.SingleStock import MACrossoverStrategy
-from src.strategies.SingleStock import RandomForestStrategy
+from src.execution.trade_executor import TradeExecutor
+from src.strategies.SingleStock.ma_crossover_strategy import MACrossoverStrategy
+from src.strategies.SingleStock.random_forest_strategy import RandomForestStrategy
 from src.data.vendors.polygon_provider import PolygonProvider
 from src.features.feature_store import FeatureStore
 from src.features.technical_indicators import TechnicalIndicators
 from src.data.data_loader import DataLoader
+from src.helpers.logger import TradingLogger
 
 # Configure logging
 logging.basicConfig(
@@ -45,25 +50,22 @@ class TradingSystem:
         self.symbols = symbols
         self.start_date = start_date or (datetime.now() - timedelta(days=365))
         self.end_date = end_date or datetime.now()
+        self.initial_budget = initial_budget
         
         # Initialize components
-        self.portfolio_manager = PortfolioManager(initial_budget=initial_budget)
-        self.trade_decider = TradeDecider(self.portfolio_manager)
+        self.portfolio_manager = PortfolioManager(initial_budget)
+        self.strategies = [
+            MACrossoverStrategy(),
+            RandomForestStrategy()
+        ]
+        self.trade_executor = TradeExecutor(self.portfolio_manager, self.strategies)
         self.data_fetcher = PolygonProvider()
         self.feature_store = FeatureStore()
         self.technical_indicators = TechnicalIndicators()
-        
-        # Clear feature cache
-        self.feature_store.clear_cache()
-        
-        # Initialize strategies
-        self.strategies = {
-            'ma_crossover': MACrossoverStrategy(),
-            'random_forest': RandomForestStrategy()
-        }
+        self.logger = TradingLogger()
         
         # Load historical data and calculate features
-        self.data = self._load_data()
+        self.historical_data = self._load_data()
         self._calculate_and_cache_features()
         
     def _load_data(self) -> Dict[str, pd.DataFrame]:
@@ -90,7 +92,7 @@ class TradingSystem:
 
     def _calculate_and_cache_features(self) -> None:
         """Calculate and cache features for all symbols."""
-        for symbol, data in self.data.items():
+        for symbol, data in self.historical_data.items():
             try:
                 # Calculate technical indicators
                 features_df = self.technical_indicators.calculate_features(data)
@@ -109,18 +111,46 @@ class TradingSystem:
             except Exception as e:
                 logger.error(f"Error calculating features for {symbol}: {str(e)}")
         
-    def _prepare_strategy_data(self) -> Dict[str, Dict[str, pd.DataFrame]]:
-        """Prepare data for each strategy.
+    def _get_current_features(self, timestamp: datetime) -> Dict[str, Dict[str, float]]:
+        """Get current features for all symbols at the given timestamp.
         
+        Args:
+            timestamp: Current timestamp
+            
         Returns:
-            Dictionary mapping strategies to their prepared data for each symbol
+            Dictionary mapping symbols to their current features
         """
-        strategy_data = {}
-        for strategy_name, strategy in self.strategies.items():
-            strategy_data[strategy_name] = {}
-            for symbol, data in self.data.items():
-                strategy_data[strategy_name][symbol] = strategy.prepare_data(data, symbol)
-        return strategy_data
+        features = {}
+        # Find the MA crossover strategy to get its window params
+        ma_strategy = None
+        for strat in self.strategies:
+            if hasattr(strat, 'short_window') and hasattr(strat, 'long_window'):
+                ma_strategy = strat
+                break
+        short_window = getattr(ma_strategy, 'short_window', 5)
+        long_window = getattr(ma_strategy, 'long_window', 20)
+        for symbol, data in self.historical_data.items():
+            mask = data.index <= timestamp
+            if not mask.any():
+                continue
+            latest_idx = data.index[mask][-1]
+            symbol_features = self.feature_store.get_cached_features(
+                symbol,
+                timestamp.strftime('%Y-%m-%d'),
+                timestamp.strftime('%Y-%m-%d')
+            )
+            if symbol_features is not None and not symbol_features.empty:
+                row = symbol_features.iloc[-1].to_dict()
+                short_col = f'sma_{short_window}'
+                long_col = f'sma_{long_window}'
+                if short_col in row:
+                    row['ma_short'] = row[short_col]
+                if long_col in row:
+                    row['ma_long'] = row[long_col]
+                features[symbol] = row
+            else:
+                logger.warning(f"No features found for {symbol} at {timestamp}")
+        return features
         
     def _get_current_prices(self, timestamp: datetime) -> Dict[str, float]:
         """Get current prices for all symbols at the given timestamp.
@@ -132,7 +162,7 @@ class TradingSystem:
             Dictionary mapping symbols to their current prices
         """
         prices = {}
-        for symbol, data in self.data.items():
+        for symbol, data in self.historical_data.items():
             # Find the latest available price before or at the timestamp
             mask = data.index <= timestamp
             if not mask.any():
@@ -145,12 +175,9 @@ class TradingSystem:
         """Run the trading system."""
         logger.info("Starting trading system...")
         
-        # Prepare data for all strategies
-        strategy_data = self._prepare_strategy_data()
-        
         # Get all unique timestamps
         all_timestamps = set()
-        for data in self.data.values():
+        for data in self.historical_data.values():
             all_timestamps.update(data.index)
         timestamps = sorted(list(all_timestamps))
         
@@ -158,50 +185,29 @@ class TradingSystem:
         for timestamp in timestamps:
             logger.info(f"Processing timestamp: {timestamp}")
             
-            # Get current prices
+            # Get current prices and features
             current_prices = self._get_current_prices(timestamp)
+            current_features = self._get_current_features(timestamp)
             
-            # Generate signals from all strategies
-            signals = {}
-            for symbol in self.symbols:
-                if symbol not in current_prices:
-                    continue
-                    
-                symbol_signals = []
-                for strategy_name, strategy in self.strategies.items():
-                    if symbol in strategy_data[strategy_name]:
-                        signal = strategy.generate_signals(
-                            strategy_data[strategy_name][symbol],
-                            symbol,
-                            timestamp
-                        )
-                        symbol_signals.append(signal)
-                signals[symbol] = symbol_signals
+            # Update trade executor with current state
+            self.trade_executor.update_prices(current_prices)
+            self.trade_executor.update_features(current_features)
             
-            # Make trade decisions
-            trade_decisions = self.trade_decider.decide_trades(
-                signals,
-                current_prices
-            )
-            
-            # Execute trades
-            executed_trades = self.trade_decider.execute_trades(
-                trade_decisions,
-                timestamp
-            )
+            # Process signals and execute trades
+            executed_trades = self.trade_executor.process(timestamp)
             
             # Log executed trades
-            for trade_dict in executed_trades:
+            for trade in executed_trades:
                 logger.info(
-                    f"Executed {trade_dict['action']} for {trade_dict['symbol']}: "
-                    f"{trade_dict['quantity']} shares at ${trade_dict['price']:.2f}"
+                    f"Executed {trade.action} for {trade.symbol}: "
+                    f"{trade.quantity} shares at ${trade.price:.2f}"
                 )
             
             # Log portfolio summary
-            summary = self.portfolio_manager.get_portfolio_summary()
+            portfolio_value = self.portfolio_manager.get_portfolio_value()
             logger.info(
-                f"Portfolio value: ${summary['total_value']:.2f} "
-                f"(Return: {summary['return_pct']:.2f}%)"
+                f"Portfolio value: ${portfolio_value:.2f} "
+                f"(Return: {((portfolio_value - self.initial_budget) / self.initial_budget) * 100:.2f}%)"
             )
 
     def get_results(self) -> Dict:
@@ -224,29 +230,26 @@ class TradingSystem:
 
 def main():
     """Main function to run the trading system."""
-    # Start with just AAPL for testing
-    symbols = ['AAPL']
-    system = TradingSystem(
-        symbols=symbols,
-        initial_budget=10000.0,
-        start_date=datetime(2023, 12, 1),  # Last month of 2023
-        end_date=datetime(2023, 12, 31)
+    # Initialize trading system with test parameters
+    trading_system = TradingSystem(
+        symbols=['AAPL'],
+        initial_budget=100000,
+        start_date=datetime(2023, 6, 12),
+        end_date=datetime(2023, 6, 29)
     )
     
-    system.run()
-    results = system.get_results()
+    # Run the trading system
+    trading_system.run()
     
-    # Print results
-    print("\nTrading Results:")
-    print(f"Final Portfolio Value: ${results['final_value']:.2f}")
-    print(f"Total Return: {results['return_pct']:.2f}%")
-    print(f"Number of Trades: {results['num_trades']}")
-    print("\nCurrent Positions:")
+    # Get and display results
+    results = trading_system.get_results()
+    logger.info("\nTrading Results:")
+    logger.info(f"Final Portfolio Value: ${results['final_value']:.2f}")
+    logger.info(f"Return: {results['return_pct']:.2f}%")
+    logger.info(f"Number of Trades: {results['num_trades']}")
+    logger.info("\nCurrent Positions:")
     for symbol, position in results['positions'].items():
-        print(
-            f"{symbol}: {position['quantity']} shares "
-            f"@ ${position['avg_price']:.2f}"
-        )
+        logger.info(f"{symbol}: {position['quantity']} shares at ${position['avg_price']:.2f}")
 
 if __name__ == "__main__":
     main() 

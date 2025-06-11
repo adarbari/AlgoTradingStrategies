@@ -41,9 +41,9 @@ def test_execute_buy(portfolio_manager):
     timestamp = datetime.now()
     
     # Test successful buy
-    success = portfolio_manager.execute_buy(
+    success = portfolio_manager.update_position(
         symbol='AAPL',
-        quantity=5,
+        quantity=5,  # positive for buy
         price=150.0,
         timestamp=timestamp
     )
@@ -55,7 +55,7 @@ def test_execute_buy(portfolio_manager):
     assert len(portfolio_manager.trade_history) == 1
     
     # Test insufficient funds
-    success = portfolio_manager.execute_buy(
+    success = portfolio_manager.update_position(
         symbol='AAPL',
         quantity=1000,  # Too many shares
         price=150.0,
@@ -70,17 +70,17 @@ def test_execute_sell(portfolio_manager):
     timestamp = datetime.now()
     
     # First buy some shares
-    portfolio_manager.execute_buy(
+    portfolio_manager.update_position(
         symbol='AAPL',
-        quantity=10,
+        quantity=10,  # positive for buy
         price=150.0,
         timestamp=timestamp
     )
     
     # Test successful sell
-    success = portfolio_manager.execute_sell(
+    success = portfolio_manager.update_position(
         symbol='AAPL',
-        quantity=5,
+        quantity=-5,  # negative for sell
         price=160.0,
         timestamp=timestamp
     )
@@ -91,9 +91,9 @@ def test_execute_sell(portfolio_manager):
     assert len(portfolio_manager.trade_history) == 2
     
     # Test insufficient shares
-    success = portfolio_manager.execute_sell(
+    success = portfolio_manager.update_position(
         symbol='AAPL',
-        quantity=10,  # Too many shares
+        quantity=-10,  # Too many shares, negative for sell
         price=160.0,
         timestamp=timestamp
     )
@@ -106,16 +106,16 @@ def test_get_portfolio_summary(portfolio_manager):
     timestamp = datetime.now()
     
     # Add some positions
-    portfolio_manager.execute_buy(
+    portfolio_manager.update_position(
         symbol='AAPL',
-        quantity=5,
+        quantity=5,  # positive for buy
         price=150.0,
         timestamp=timestamp
     )
     
-    portfolio_manager.execute_buy(
+    portfolio_manager.update_position(
         symbol='MSFT',
-        quantity=3,
+        quantity=3,  # positive for buy
         price=200.0,
         timestamp=timestamp
     )
@@ -138,16 +138,16 @@ def test_get_trade_history(portfolio_manager):
     timestamp = datetime.now()
     
     # Execute some trades
-    portfolio_manager.execute_buy(
+    portfolio_manager.update_position(
         symbol='AAPL',
-        quantity=5,
+        quantity=5,  # positive for buy
         price=150.0,
         timestamp=timestamp
     )
     
-    portfolio_manager.execute_sell(
+    portfolio_manager.update_position(
         symbol='AAPL',
-        quantity=3,
+        quantity=-3,  # negative for sell
         price=160.0,
         timestamp=timestamp
     )

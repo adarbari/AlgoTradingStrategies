@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 import joblib
 from datetime import datetime
 import glob
@@ -16,6 +16,66 @@ class FeatureStore:
         """
         self.cache_dir = cache_dir
         os.makedirs(cache_dir, exist_ok=True)
+        self._ma_windows = {}  # Store MA windows for each symbol
+    
+    def set_ma_windows(self, symbol: str, short_window: int, long_window: int) -> None:
+        """Set the moving average windows for a symbol.
+        
+        Args:
+            symbol: Stock symbol
+            short_window: Short-term MA window
+            long_window: Long-term MA window
+        """
+        self._ma_windows[symbol] = {
+            'short_window': short_window,
+            'long_window': long_window
+        }
+    
+    def _calculate_moving_averages(self, data: pd.DataFrame, symbol: str) -> pd.DataFrame:
+        """Calculate moving averages for a symbol.
+        
+        Args:
+            data: Price data
+            symbol: Stock symbol
+            
+        Returns:
+            DataFrame with moving averages
+        """
+        if symbol not in self._ma_windows:
+            raise ValueError(f"No MA windows set for {symbol}")
+            
+        windows = self._ma_windows[symbol]
+        features = pd.DataFrame(index=data.index)
+        features['price'] = data['close']  # Use 'close' column as price
+        features['ma_short'] = data['close'].rolling(window=windows['short_window']).mean()
+        features['ma_long'] = data['close'].rolling(window=windows['long_window']).mean()
+        return features
+    
+    def calculate_and_cache_features(
+        self,
+        symbol: str,
+        data: pd.DataFrame,
+        start_date: str,
+        end_date: str
+    ) -> pd.DataFrame:
+        """Calculate and cache features for a symbol.
+        
+        Args:
+            symbol: Stock symbol
+            data: Price data
+            start_date: Start date in YYYY-MM-DD format
+            end_date: End date in YYYY-MM-DD format
+            
+        Returns:
+            DataFrame with calculated features
+        """
+        # Calculate features
+        features = self._calculate_moving_averages(data, symbol)
+        
+        # Cache the features
+        self.cache_features(symbol, start_date, end_date, features)
+        
+        return features
     
     def _get_cache_files(self, symbol: str) -> List[str]:
         """Get all cache files for a symbol.

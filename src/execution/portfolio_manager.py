@@ -37,6 +37,28 @@ class PortfolioManager:
         """Get all current positions."""
         return self.positions
     
+    def validate_position_size(self, symbol: str, quantity: int, price: float) -> bool:
+        """Validate if a position size is acceptable.
+        
+        Args:
+            symbol: Stock symbol
+            quantity: Number of shares
+            price: Price per share
+            
+        Returns:
+            bool: True if position size is valid
+        """
+        # Check if we have enough cash
+        if not self.can_buy(symbol, quantity, price):
+            return False
+            
+        # Check if position size is within limits (e.g., max 20% of portfolio)
+        position_value = quantity * price
+        portfolio_value = self.get_portfolio_value()
+        max_position_value = portfolio_value * 0.2  # 20% limit
+        
+        return position_value <= max_position_value
+    
     def can_buy(self, symbol: str, quantity: int, price: float) -> bool:
         """Check if we can buy the specified quantity at the given price."""
         required_cash = quantity * price
@@ -45,88 +67,66 @@ class PortfolioManager:
     def can_sell(self, symbol: str, quantity: int) -> bool:
         """Check if we can sell the specified quantity."""
         position = self.positions.get(symbol)
-        return position is not None and position['quantity'] >= quantity
+        return position is not None and position['quantity'] >= abs(quantity)
     
-    def execute_buy(self, symbol: str, quantity: int, price: float, timestamp: datetime) -> bool:
-        """Execute a buy order.
+    def update_position(self, symbol: str, quantity: int, price: float, timestamp: datetime) -> bool:
+        """Update position after a trade is executed.
         
         Args:
             symbol: Stock symbol
-            quantity: Number of shares to buy
+            quantity: Number of shares (positive for buy, negative for sell)
             price: Price per share
             timestamp: Trade timestamp
             
         Returns:
-            bool: True if trade was executed successfully
+            bool: True if position was updated successfully
         """
-        if not self.can_buy(symbol, quantity, price):
-            return False
+        if quantity > 0:  # Buy
+            if not self.validate_position_size(symbol, quantity, price):
+                return False
+                
+            cost = quantity * price
+            self.cash -= cost
             
-        cost = quantity * price
-        self.cash -= cost
+            if symbol in self.positions:
+                # Update existing position
+                current_pos = self.positions[symbol]
+                total_quantity = current_pos['quantity'] + quantity
+                total_cost = (current_pos['quantity'] * current_pos['avg_price']) + cost
+                self.positions[symbol] = {
+                    'quantity': total_quantity,
+                    'avg_price': total_cost / total_quantity
+                }
+            else:
+                # Create new position
+                self.positions[symbol] = {
+                    'quantity': quantity,
+                    'avg_price': price
+                }
+                
+        else:  # Sell
+            if not self.can_sell(symbol, quantity):
+                return False
+                
+            position = self.positions[symbol]
+            proceeds = abs(quantity) * price
+            self.cash += proceeds
+            
+            # Update position
+            new_quantity = position['quantity'] - abs(quantity)
+            if new_quantity == 0:
+                del self.positions[symbol]
+            else:
+                self.positions[symbol]['quantity'] = new_quantity
         
-        if symbol in self.positions:
-            # Update existing position
-            current_pos = self.positions[symbol]
-            total_quantity = current_pos['quantity'] + quantity
-            total_cost = (current_pos['quantity'] * current_pos['avg_price']) + cost
-            self.positions[symbol] = {
-                'quantity': total_quantity,
-                'avg_price': total_cost / total_quantity
-            }
-        else:
-            # Create new position
-            self.positions[symbol] = {
-                'quantity': quantity,
-                'avg_price': price
-            }
-            
         # Record trade
         self.trade_history.append({
             'timestamp': timestamp,
             'symbol': symbol,
-            'action': 'BUY',
-            'quantity': quantity,
+            'action': 'BUY' if quantity > 0 else 'SELL',
+            'quantity': abs(quantity),
             'price': price,
-            'total': cost
-        })
-        
-        return True
-    
-    def execute_sell(self, symbol: str, quantity: int, price: float, timestamp: datetime) -> bool:
-        """Execute a sell order.
-        
-        Args:
-            symbol: Stock symbol
-            quantity: Number of shares to sell
-            price: Price per share
-            timestamp: Trade timestamp
-            
-        Returns:
-            bool: True if trade was executed successfully
-        """
-        if not self.can_sell(symbol, quantity):
-            return False
-            
-        position = self.positions[symbol]
-        proceeds = quantity * price
-        self.cash += proceeds
-        
-        # Update position
-        new_quantity = position['quantity'] - quantity
-        if new_quantity == 0:
-            del self.positions[symbol]
-        else:
-            self.positions[symbol]['quantity'] = new_quantity
-            
-        # Record trade
-        self.trade_history.append({
-            'timestamp': timestamp,
-            'symbol': symbol,
-            'action': 'SELL',
-            'quantity': quantity,
-            'price': price,
-            'total': proceeds
+            'total': abs(quantity) * price
         })
         
         return True

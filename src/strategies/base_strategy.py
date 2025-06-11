@@ -7,8 +7,16 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 import pandas as pd
 import numpy as np
+from dataclasses import dataclass
 
-from src.execution.trade_decider import StrategySignal
+@dataclass
+class StrategySignal:
+    symbol: str
+    action: str  # 'BUY', 'SELL', or 'HOLD'
+    probabilities: Dict[str, float]  # e.g., {'BUY': 0.7, 'SELL': 0.2, 'HOLD': 0.1}
+    confidence: float  # 0.0 to 1.0
+    timestamp: datetime  # Timestamp of the signal
+    features: Dict[str, float]  # Features used to generate the signal
 
 class BaseStrategy(ABC):
     """Base class for all trading strategies."""
@@ -37,14 +45,14 @@ class BaseStrategy(ABC):
     @abstractmethod
     def generate_signals(
         self,
-        data: pd.DataFrame,
+        features: Dict[str, float],
         symbol: str,
         timestamp: datetime
     ) -> StrategySignal:
         """Generate trading signals for a symbol at a given timestamp.
         
         Args:
-            data: Prepared data for the strategy
+            features: Dictionary of features for the current timestamp
             symbol: Stock symbol
             timestamp: Current timestamp
             

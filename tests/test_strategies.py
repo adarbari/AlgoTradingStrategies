@@ -8,11 +8,10 @@ import numpy as np
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
-from src.strategies.base_strategy import BaseStrategy
+from src.strategies.base_strategy import BaseStrategy, StrategySignal
 from src.strategies.SingleStock.ma_crossover_strategy import MACrossoverStrategy
 from src.strategies.SingleStock.random_forest_strategy import RandomForestStrategy
 from src.features.feature_store import FeatureStore
-from src.execution.trade_decider import StrategySignal
 
 @pytest.fixture
 def sample_data():
@@ -129,7 +128,9 @@ def test_ma_strategy_generate_signals(ma_strategy, sample_data):
 def test_rf_strategy_generate_signals(rf_strategy, sample_data):
     """Test RandomForestStrategy signal generation."""
     prepared_data = rf_strategy.prepare_data(sample_data, 'AAPL')
-    signals = rf_strategy.generate_signals(prepared_data, 'AAPL', datetime.now())
+    # Pass only the last row as a dict
+    last_row = prepared_data.iloc[-1][rf_strategy.feature_columns].to_dict()
+    signals = rf_strategy.generate_signals(last_row, 'AAPL', datetime.now())
     assert isinstance(signals, StrategySignal)
     assert hasattr(signals, 'timestamp')
     assert hasattr(signals, 'symbol')
@@ -165,7 +166,9 @@ def test_rf_strategy_update(rf_strategy, sample_data):
     }, index=new_dates)
     rf_strategy.update(new_data, 'AAPL')
     prepared_new_data = rf_strategy.prepare_data(new_data, 'AAPL')
-    signals = rf_strategy.generate_signals(prepared_new_data, 'AAPL', datetime.now())
+    # Pass only the last row as a dict
+    last_row = prepared_new_data.iloc[-1][rf_strategy.feature_columns].to_dict()
+    signals = rf_strategy.generate_signals(last_row, 'AAPL', datetime.now())
     assert isinstance(signals, StrategySignal)
 
 @pytest.mark.slow

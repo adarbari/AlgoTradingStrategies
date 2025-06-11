@@ -1,6 +1,12 @@
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, List, Optional
+from src.execution.portfolio_manager import PortfolioManager
+from src.strategies.base_strategy import BaseStrategy, StrategySignal
+import logging
+from collections import defaultdict
+
+logger = logging.getLogger(__name__)
 
 @dataclass
 class Trade:
@@ -14,12 +20,182 @@ class Trade:
     confidence: float
 
 class TradeExecutor:
-    """Class responsible for executing trades."""
-    
-    def __init__(self):
-        """Initialize the trade executor."""
-        self.trades: List[Trade] = []
+    """
+    Orchestrates strategy signal generation, aggregates signals, decides trades, and executes them via PortfolioManager.
+    """
+    def __init__(self, portfolio_manager: PortfolioManager, strategies: List[BaseStrategy]):
+        self.portfolio_manager = portfolio_manager
+        self.strategies = strategies
+        self.current_prices: Dict[str, float] = {}
+        self.current_features: Dict[str, Dict[str, float]] = {}  # symbol -> features
+        logger.info("TradeExecutor initialized with %d strategies", len(strategies))
+
+    def update_prices(self, prices: Dict[str, float]):
+        """Update current market prices"""
+        self.current_prices = prices
+        logger.debug("Updated prices for %d symbols", len(prices))
         
+    def update_features(self, features: Dict[str, Dict[str, float]]):
+        """Update current features for each symbol"""
+        self.current_features = features
+        logger.debug("Updated features for %d symbols", len(features))
+        
+    def process(self, timestamp: datetime) -> List[Trade]:
+        """Process all strategies and execute trades"""
+        logger.info("Processing timestamp: %s", timestamp)
+        
+        # Get signals from all strategies for all symbols
+        all_signals: List[StrategySignal] = []
+        
+        for strategy in self.strategies:
+            strategy_name = strategy.__class__.__name__
+            for symbol, features in self.current_features.items():
+                try:
+                    if symbol not in self.current_prices:
+                        logger.error("Symbol %s not found in current prices", symbol)
+                        continue
+                        
+                    signal = strategy.generate_signals(features, symbol, timestamp)
+                    logger.info("Strategy %s generated signal for %s: %s", strategy_name, symbol, signal)
+                    all_signals.append(signal)
+                except Exception as e:
+                    logger.error("Error generating signals for strategy %s, symbol %s: %s", strategy_name, symbol, str(e))
+                    continue
+        
+        if not all_signals:
+            logger.info("No signals generated for timestamp %s", timestamp)
+            return []
+            
+        # Aggregate signals and make trade decisions
+        aggregated_signals = self._aggregate_signals(all_signals)
+        logger.info("Aggregated signals: %s", aggregated_signals)
+        
+        # Convert aggregated signals to Trade objects
+        trades = []
+        for symbol, weighted_signal in aggregated_signals.items():
+            if symbol not in self.current_prices:
+                logger.error("Symbol %s not found in current prices for trade execution", symbol)
+                continue
+            current_price = self.current_prices[symbol]
+            action = None
+            confidence = abs(weighted_signal)
+            if weighted_signal >= 0.5:
+                action = 'BUY'
+            elif weighted_signal <= -0.5:
+                action = 'SELL'
+            else:
+                continue  # No trade if signal is weak
+            quantity = self._calculate_position_size(symbol, current_price, confidence)
+            if quantity > 0:
+                trade = Trade(
+                    timestamp=timestamp,
+                    symbol=symbol,
+                    action=action,
+                    quantity=int(quantity),
+                    price=current_price,
+                    strategy="Aggregated",
+                    confidence=confidence
+                )
+                trades.append(trade)
+        logger.info("Generated %d trade decisions", len(trades))
+        
+        # Execute trades
+        executed_trades = []
+        for trade in trades:
+            try:
+                if self._execute_trade(trade):
+                    executed_trades.append(trade)
+                    logger.info("Executed trade: %s %s %.2f shares at $%.2f", 
+                              trade.action, trade.symbol, trade.quantity, trade.price)
+            except Exception as e:
+                logger.error("Error executing trade for %s: %s", trade.symbol, str(e))
+                continue
+                
+        logger.info("Successfully executed %d trades", len(executed_trades))
+        return executed_trades
+        
+    def _aggregate_signals(self, signals: List[StrategySignal]) -> Dict[str, float]:
+        """Aggregate signals from multiple strategies for each symbol."""
+        symbol_signals = defaultdict(list)
+        
+        # Group signals by symbol
+        for signal in signals:
+            symbol_signals[signal.symbol].append(signal)
+        
+        # Calculate weighted signals for each symbol
+        aggregated_signals = {}
+        for symbol, symbol_signals in symbol_signals.items():
+            total_confidence = sum(s.confidence for s in symbol_signals)
+            if total_confidence == 0:
+                continue
+            
+            # Convert actions to numeric values
+            action_values = {
+                'BUY': 1.0,
+                'SELL': -1.0,
+                'HOLD': 0.0
+            }
+            
+            # Calculate weighted signal
+            weighted_signal = sum(
+                action_values[s.action] * s.confidence 
+                for s in symbol_signals
+            ) / total_confidence
+            
+            aggregated_signals[symbol] = weighted_signal
+        
+        return aggregated_signals
+        
+    def _calculate_position_size(self, symbol: str, price: float, confidence: float) -> float:
+        """Calculate position size based on portfolio value and confidence"""
+        portfolio_value = self.portfolio_manager.get_portfolio_value()
+        max_position_value = portfolio_value * 0.2  # Maximum 20% of portfolio per position
+        position_value = max_position_value * confidence
+        quantity = position_value / price
+        
+        logger.info("Position size calculation for %s:", symbol)
+        logger.info("  Portfolio value: $%.2f", portfolio_value)
+        logger.info("  Max position value: $%.2f", max_position_value)
+        logger.info("  Confidence: %.2f", confidence)
+        logger.info("  Position value: $%.2f", position_value)
+        logger.info("  Calculated quantity: %.2f shares", quantity)
+        
+        return quantity
+        
+    def _execute_trade(self, trade: Trade) -> bool:
+        """Execute a trade through the portfolio manager"""
+        try:
+            # Validate position size before execution
+            if not self.portfolio_manager.validate_position_size(trade.symbol, trade.quantity, trade.price):
+                logger.warning("Position size validation failed for %s: quantity=%.2f, price=%.2f", 
+                             trade.symbol, trade.quantity, trade.price)
+                return False
+                
+            if trade.action == 'BUY':
+                success = self.portfolio_manager.update_position(
+                    trade.symbol,
+                    trade.quantity,
+                    trade.price,
+                    'buy'
+                )
+            else:  # SELL
+                success = self.portfolio_manager.update_position(
+                    trade.symbol,
+                    trade.quantity,
+                    trade.price,
+                    'sell'
+                )
+                
+            if success:
+                logger.info("Successfully executed %s trade for %s", trade.action, trade.symbol)
+            else:
+                logger.warning("Failed to execute %s trade for %s", trade.action, trade.symbol)
+            return success
+            
+        except Exception as e:
+            logger.error("Error executing trade for %s: %s", trade.symbol, str(e))
+            return False
+
     def execute_trade(self, trade: Trade) -> None:
         """Execute a trade.
         

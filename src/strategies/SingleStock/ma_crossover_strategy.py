@@ -6,10 +6,10 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 import pandas as pd
 import numpy as np
+import logging
 
 from src.features.feature_store import FeatureStore
-from src.strategies.base_strategy import BaseStrategy
-from src.execution.trade_decider import StrategySignal
+from src.strategies.base_strategy import BaseStrategy, StrategySignal
 
 class MACrossoverStrategy(BaseStrategy):
     """
@@ -37,10 +37,11 @@ class MACrossoverStrategy(BaseStrategy):
         self.long_window = long_window
         self.cache_dir = cache_dir
         self.feature_store = FeatureStore(cache_dir=cache_dir)
+        self._prev_features = None  # Store previous features for crossover detection
         
     def prepare_data(self, data: pd.DataFrame, symbol: str) -> pd.DataFrame:
         """
-        Prepare data for the strategy by calculating moving averages.
+        Prepare data for the strategy by using cached moving averages or calculating them.
         
         Args:
             data (pd.DataFrame): Price data
@@ -56,21 +57,42 @@ class MACrossoverStrategy(BaseStrategy):
         print(f"Looking for features in cache: {symbol} from {start_date} to {end_date}")
         print(f"Cache directory: {self.cache_dir}")
         
-        # Fetch features from feature store
-        features = self.feature_store.get_cached_features(symbol, start_date, end_date)
-        if features is None:
-            raise ValueError(f"No features found in cache for {symbol} from {start_date} to {end_date}")
-            
-        print(f"Found features with columns: {features.columns.tolist()}")
+        # Set MA windows in feature store
+        self.feature_store.set_ma_windows(symbol, self.short_window, self.long_window)
         
-        # Calculate moving averages
-        features['ma_short'] = features['price'].rolling(window=self.short_window).mean()
-        features['ma_long'] = features['price'].rolling(window=self.long_window).mean()
+        # Try to get cached features
+        features = self.feature_store.get_cached_features(
+            symbol, 
+            start_date, 
+            end_date
+        )
+
+        if features is None:
+            print("No cached features found, calculating moving averages...")
+            features = self.feature_store.calculate_and_cache_features(
+                symbol,
+                data,
+                start_date,
+                end_date
+            )
+        else:
+            print(f"Found cached features with columns: {features.columns.tolist()}")
+
+        # Map SMA columns to 'ma_short' and 'ma_long' for each row
+        short_col = f'sma_{self.short_window}'
+        long_col = f'sma_{self.long_window}'
+        if short_col in features.columns and long_col in features.columns:
+            features = features.copy()
+            features['ma_short'] = features[short_col]
+            features['ma_long'] = features[long_col]
+        else:
+            print(f"Warning: Expected columns {short_col} and/or {long_col} not found in features.")
+
         return features
     
     def generate_signals(
         self,
-        data: pd.DataFrame,
+        features: Dict[str, float],
         symbol: str,
         timestamp: datetime
     ) -> StrategySignal:
@@ -78,45 +100,69 @@ class MACrossoverStrategy(BaseStrategy):
         Generate trading signals based on MA crossovers.
         
         Args:
-            data (pd.DataFrame): Price data
+            features (Dict[str, float]): Current features including price and moving averages
             symbol (str): Stock symbol
             timestamp (datetime): Current timestamp
             
         Returns:
             StrategySignal: Trading signal with probabilities and confidence
         """
-        # Get latest values
-        latest = data.iloc[-1]
-        prev = data.iloc[-2]
-        
+        # Store current features for next comparison
+        current_features = features.copy()
+
+        # Patch: Handle missing 'ma_short' or 'ma_long' gracefully
+        if 'ma_short' not in current_features or 'ma_long' not in current_features:
+            logging.warning(f"Missing 'ma_short' or 'ma_long' in features for {symbol} at {timestamp}. Features: {list(current_features.keys())}")
+            probabilities = {'BUY': 0.1, 'SELL': 0.1, 'HOLD': 0.8}
+            confidence = 0.0
+            action = 'HOLD'
+            self._prev_features = current_features
+            return StrategySignal(
+                timestamp=timestamp,
+                symbol=symbol,
+                action=action,
+                features=current_features,
+                probabilities=probabilities,
+                confidence=confidence
+            )
+
         # Calculate probabilities based on MA crossover
-        if latest['ma_short'] > latest['ma_long'] and prev['ma_short'] <= prev['ma_long']:
-            # Bullish crossover
-            probabilities = {'BUY': 0.8, 'SELL': 0.1, 'HOLD': 0.1}
-            confidence = 0.8
-        elif latest['ma_short'] < latest['ma_long'] and prev['ma_short'] >= prev['ma_long']:
-            # Bearish crossover
-            probabilities = {'BUY': 0.1, 'SELL': 0.8, 'HOLD': 0.1}
-            confidence = 0.8
+        if self._prev_features is None:
+            # First signal, no crossover possible
+            probabilities = {'BUY': 0.1, 'SELL': 0.1, 'HOLD': 0.8}
+            confidence = 0.6
         else:
-            # No crossover
-            if latest['ma_short'] > latest['ma_long']:
-                # Uptrend
-                probabilities = {'BUY': 0.3, 'SELL': 0.1, 'HOLD': 0.6}
-                confidence = 0.6
+            # Check for crossover
+            if (current_features['ma_short'] > current_features['ma_long'] and 
+                self._prev_features['ma_short'] <= self._prev_features['ma_long']):
+                # Bullish crossover
+                probabilities = {'BUY': 0.8, 'SELL': 0.1, 'HOLD': 0.1}
+                confidence = 0.8
+            elif (current_features['ma_short'] < current_features['ma_long'] and 
+                  self._prev_features['ma_short'] >= self._prev_features['ma_long']):
+                # Bearish crossover
+                probabilities = {'BUY': 0.1, 'SELL': 0.8, 'HOLD': 0.1}
+                confidence = 0.8
             else:
-                # Downtrend
-                probabilities = {'BUY': 0.1, 'SELL': 0.3, 'HOLD': 0.6}
-                confidence = 0.6
+                # No crossover
+                if current_features['ma_short'] > current_features['ma_long']:
+                    # Uptrend
+                    probabilities = {'BUY': 0.3, 'SELL': 0.1, 'HOLD': 0.6}
+                    confidence = 0.6
+                else:
+                    # Downtrend
+                    probabilities = {'BUY': 0.1, 'SELL': 0.3, 'HOLD': 0.6}
+                    confidence = 0.6
         
+        # Update previous features for next comparison
+        self._prev_features = current_features
+        
+        action = max(probabilities.items(), key=lambda x: x[1])[0]
         return StrategySignal(
             timestamp=timestamp,
             symbol=symbol,
-            features={
-                'price': latest['price'],
-                'ma_short': latest['ma_short'],
-                'ma_long': latest['ma_long']
-            },
+            action=action,
+            features=current_features,
             probabilities=probabilities,
             confidence=confidence
         )
@@ -129,8 +175,8 @@ class MACrossoverStrategy(BaseStrategy):
             data (pd.DataFrame): New price data
             symbol (str): Stock symbol
         """
-        # No state to update for MA Crossover
-        pass
+        # Reset previous features when updating with new data
+        self._prev_features = None
     
     def get_features(self) -> list:
         """

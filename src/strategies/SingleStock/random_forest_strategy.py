@@ -9,8 +9,7 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 
-from src.strategies.base_strategy import BaseStrategy
-from src.execution.trade_decider import StrategySignal
+from src.strategies.base_strategy import BaseStrategy, StrategySignal
 from src.features.feature_store import FeatureStore
 
 class RandomForestStrategy(BaseStrategy):
@@ -47,30 +46,39 @@ class RandomForestStrategy(BaseStrategy):
         self.min_samples_split = min_samples_split
         self.lookback_window = lookback_window
         self.model = None
+        self.scaler = StandardScaler()
+        self.feature_columns = None
         
     def prepare_data(self, data: pd.DataFrame, symbol: str) -> pd.DataFrame:
         """
-        Prepare data for the strategy by calculating features and training the model.
+        Prepare data for the strategy by calculating features.
         
         Args:
             data (pd.DataFrame): Price data
             symbol (str): Stock symbol
             
         Returns:
-            pd.DataFrame: Data with features and target
+            pd.DataFrame: Data with features
         """
         # Determine date range
         start_date = data.index.min().strftime('%Y-%m-%d')
         end_date = data.index.max().strftime('%Y-%m-%d')
+        
         # Fetch features from feature store
         features = self.feature_store.get_cached_features(symbol, start_date, end_date)
         if features is None:
-            raise ValueError(f"No features found in cache for {symbol} from {start_date} to {end_date}.")
-        # Create target variable (1 if price goes up, 0 if down)
-        features['target'] = (features['price'].shift(-1) > features['price']).astype(int)
-        features = features.dropna()
+            raise ValueError(f"No features found in cache for {symbol} from {start_date} to {end_date}")
+        
+        # Store feature columns for prediction
+        self.feature_columns = [col for col in features.columns if col not in ['target', 'price']]
+        
+        # Train model and fit scaler if not already done
         if self.model is None:
             self._train_model(features)
+            features[self.feature_columns] = self.scaler.fit_transform(features[self.feature_columns])
+        else:
+            features[self.feature_columns] = self.scaler.transform(features[self.feature_columns])
+        
         return features
     
     def _train_model(self, data: pd.DataFrame) -> None:
@@ -96,70 +104,65 @@ class RandomForestStrategy(BaseStrategy):
     
     def generate_signals(
         self,
-        data: pd.DataFrame,
+        features: Dict[str, float],
         symbol: str,
         timestamp: datetime
     ) -> StrategySignal:
         """
-        Generate trading signals based on model predictions.
+        Generate trading signals based on current features.
         
         Args:
-            data (pd.DataFrame): Price data
+            features (Dict[str, float]): Current features
             symbol (str): Stock symbol
             timestamp (datetime): Current timestamp
             
         Returns:
             StrategySignal: Trading signal with probabilities and confidence
         """
-        # Get latest data point
-        latest = data.iloc[-1]
+        if not self.model:
+            # Return HOLD signal with low confidence if model is not trained
+            return StrategySignal(
+                symbol=symbol,
+                action='HOLD',
+                probabilities={'BUY': 0.33, 'SELL': 0.33, 'HOLD': 0.34},
+                confidence=0.1,
+                timestamp=timestamp,
+                features=features
+            )
         
-        # Select features for prediction
-        feature_cols = [col for col in data.columns if col not in ['target', 'price']]
-        X = latest[feature_cols].values.reshape(1, -1)
+        # Scale features
+        feature_values = np.array([features[col] for col in self.feature_columns]).reshape(1, -1)
+        scaled_features = self.scaler.transform(feature_values)
         
         # Get prediction probabilities
-        probs = self.model.predict_proba(X)[0]
-        
-        # Calculate signal probabilities
-        if len(probs) == 2:  # Binary classification
-            probabilities = {
-                'BUY': probs[1],
-                'SELL': probs[0],
-                'HOLD': 0.0
-            }
-        else:  # Multi-class classification
-            probabilities = {
-                'BUY': probs[1],
-                'SELL': probs[2],
-                'HOLD': probs[0]
-            }
-        
-        # Calculate confidence based on prediction probability
-        confidence = max(probabilities.values())
+        probabilities = self.model.predict_proba(scaled_features)[0]
+        class_labels = self.model.classes_
+        label_map = {-1: 'SELL', 0: 'HOLD', 1: 'BUY'}
+        mapped_probs = {label_map.get(int(cls), str(cls)): float(prob) for cls, prob in zip(class_labels, probabilities)}
+        action_idx = np.argmax(probabilities)
+        action_label = class_labels[action_idx]
+        action = label_map.get(int(action_label), str(action_label))
+        confidence = probabilities[action_idx]
         
         return StrategySignal(
-            timestamp=timestamp,
             symbol=symbol,
-            features={
-                'price': latest['price'],
-                **{col: latest[col] for col in feature_cols}
-            },
-            probabilities=probabilities,
-            confidence=confidence
+            action=action,
+            probabilities=mapped_probs,
+            confidence=confidence,
+            timestamp=timestamp,
+            features=features
         )
     
     def update(self, data: pd.DataFrame, symbol: str) -> None:
         """
-        Update the strategy with new data and retrain the model.
+        Update the strategy with new data.
         
         Args:
             data (pd.DataFrame): New price data
             symbol (str): Stock symbol
         """
-        # Retrain model with new data
-        features = self.prepare_data(data, symbol)
-        self._train_model(features)
+        # No state to update for Random Forest
+        pass
     
     def get_features(self) -> list:
         """
@@ -168,7 +171,7 @@ class RandomForestStrategy(BaseStrategy):
         Returns:
             list: List of feature names
         """
-        return self.feature_store.get_feature_names()
+        return self.feature_columns or []
     
     def get_parameters(self) -> Dict[str, Any]:
         """
