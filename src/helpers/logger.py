@@ -9,7 +9,7 @@ import json
 
 class TradingLogger:
     def __init__(self, run_dir: Optional[str] = None):
-        self.run_dir = run_dir or f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        self.run_dir = run_dir or os.path.join("logs", f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
         self._setup_logging()
         self.logger = logging.getLogger(__name__)
         self.last_timestamp = None

@@ -12,11 +12,10 @@ import sys
 # Add the parent directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from helpers import RunManager
-from decimal import Decimal
-from data import get_cached_data, is_market_hours
-from strategies.SingleStock.single_stock_strategy import SingleStockStrategy
-from strategies.ml_strategy import MLTradingStrategy
+from src.helpers import RunManager
+# from src.data import get_cached_data, is_market_hours  # Uncomment if these exist in src.data
+from src.strategies.SingleStock.single_stock_strategy import SingleStockStrategy
+# from src.strategies.ml_strategy import MLTradingStrategy  # Uncomment if this exists in src.strategies
 import matplotlib.pyplot as plt
 
 warnings.filterwarnings('ignore')
@@ -24,7 +23,7 @@ warnings.filterwarnings('ignore')
 def backtest_strategy(symbol, start_date, end_date, run_manager, strategy_type='ma'):
     """Run backtest for a specific strategy"""
     # Get data
-    data = get_cached_data(symbol, start_date, end_date)
+    # data = get_cached_data(symbol, start_date, end_date)
     if data is None or data.empty:
         return None
         

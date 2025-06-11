@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 import sys
 from collections import namedtuple
-from strategies.SingleStock.single_stock_strategy import SingleStockStrategy
+from src.strategies.SingleStock.single_stock_strategy import SingleStockStrategy
 
 # Add the parent directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -70,7 +70,10 @@ def parse_trade_file(file_path, run_timestamp):
     )
 
 def compare_results():
-    run_dirs = [d for d in os.listdir('.') if os.path.isdir(d) and d.startswith('run_')]
+    logs_dir = 'logs'
+    run_dirs = []
+    if os.path.exists(logs_dir):
+        run_dirs = [os.path.join(logs_dir, d) for d in os.listdir(logs_dir) if os.path.isdir(os.path.join(logs_dir, d)) and d.startswith('run_')]
     if not run_dirs:
         print("No run directories found!")
         return

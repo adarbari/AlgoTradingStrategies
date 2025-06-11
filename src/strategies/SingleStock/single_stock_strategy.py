@@ -3,13 +3,7 @@ import numpy as np
 from decimal import Decimal
 from datetime import datetime, timedelta
 import logging
-from data import (
-    is_market_hours,
-    is_end_of_day,
-    round_decimal,
-    SHARE_PRECISION,
-    CASH_PRECISION
-)
+from src.helpers.market_utils import is_market_hours, is_end_of_day, round_decimal, SHARE_PRECISION, CASH_PRECISION
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
@@ -22,7 +16,7 @@ import json
 from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import learning_curve
 import joblib
-from data.feature_engineering import FeatureEngineer
+from src.features import TechnicalIndicators
 
 class SingleStockStrategy:
     def __init__(self, short_window=10, long_window=100, trade_size=1000, total_budget=10000, use_ml=True):
@@ -40,33 +34,60 @@ class SingleStockStrategy:
             self.test_data = None
             self.test_scaled = None
             self.feature_columns = [
-                'SMA_20', 'SMA_50', 'RSI', 'MACD', 'MACD_Signal',
-                'BB_Upper', 'BB_Middle', 'BB_Lower',
-                'Price_Change', 'Volume_Change', 'Volatility',
-                'Price_Change_5min', 'Price_Change_15min',
-                'Volume_MA_5', 'Volume_MA_15',
-                'Price_Range', 'Price_Range_MA',
-                'Volatility_5min', 'Volatility_15min'
+                'sma_20', 'sma_50', 'rsi_14', 'macd', 'macd_signal',
+                'bb_upper', 'bb_middle', 'bb_lower',
+                'price_change', 'volume_change', 'volatility',
+                'price_change_5min', 'price_change_15min',
+                'volume_ma_5', 'volume_ma_15',
+                'price_range', 'price_range_ma',
+                'volatility_5min', 'volatility_15min'
             ]
             
         # Trading constraints
-        self.min_probability_threshold = 0.4  # Lowered from 0.6 to 0.4
-        self.min_volume_threshold = 500      # Lowered from 1000 to 500
-        self.max_position_duration = 8        # Increased from 4 to 8 hours
-
+        self.min_probability_threshold = 0.4
+        self.min_volume_threshold = 500
+        self.max_position_duration = 8  # hours
+        
+        # Initialize feature engineer
+        self.feature_engineer = TechnicalIndicators()
+    
+    def _create_target_variable(self, data, lookahead_periods=5):
+        """Create target variable based on future price movements."""
+        # Calculate future returns
+        future_returns = data['close'].shift(-lookahead_periods) / data['close'] - 1
+        
+        # Create target variable (0: hold, 1: buy, 2: sell)
+        data['target'] = 0  # Default to hold
+        data.loc[future_returns > 0.001, 'target'] = 1  # Buy if return > 0.1%
+        data.loc[future_returns < -0.001, 'target'] = 2  # Sell if return < -0.1%
+        
+        # Drop NaN values at the end of the dataset
+        data = data.dropna()
+        
+        return data
+    
     def train_model(self, data, run_manager=None, symbol=None):
-        """Train the ML model if ML strategy is enabled"""
+        """Train the ML model if in ML mode."""
         if not self.use_ml:
             return
+            
+        if data is None or data.empty:
+            self.logger.warning("No data provided for training")
+            return
+            
+        # Create target variable
+        data = self._create_target_variable(data)
+            
+        # Ensure all required features are present
+        missing_features = set(self.feature_columns) - set(data.columns)
+        if missing_features:
+            data = self.feature_engineer.calculate_features(data, list(missing_features))
         
-        # Use features directly from data
-        X = data.loc[:, self.feature_columns].copy()
-        y = data['target']
+        # Prepare features and target
+        X = data[self.feature_columns].copy()
+        y = data['target'].copy()
         
-        # Debug: log feature columns used for training
-        print(f"[DEBUG] Training feature columns: {list(X.columns)}")
-        
-        # Split into training and testing sets
+        # Split data
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
         
         # Scale features
@@ -77,17 +98,21 @@ class SingleStockStrategy:
         self.model.fit(X_train_scaled, y_train)
         
         # Store test data for later use
-        self.test_data = pd.DataFrame(X_test, columns=self.feature_columns)
-        self.test_data['target'] = y_test
+        self.test_data = X_test
         self.test_scaled = X_test_scaled
         
-        self.is_trained = True
+        # Log training results
+        if run_manager:
+            train_score = self.model.score(X_train_scaled, y_train)
+            test_score = self.model.score(X_test_scaled, y_test)
+            logging.info(f"Model training complete for {symbol}")
+            logging.info(f"Training accuracy: {train_score:.2f}")
+            logging.info(f"Testing accuracy: {test_score:.2f}")
         
-        if run_manager and symbol:
-            self.visualize_model(symbol, run_manager.run_dir)
-
+        self.is_trained = True
+    
     def generate_signals(self, data, run_manager=None, symbol=None):
-        """Generate trading signals based on the strategy type"""
+        """Generate trading signals based on the strategy type."""
         if data is None or data.empty:
             self.logger.warning("No data provided for signal generation")
             return None
@@ -95,16 +120,14 @@ class SingleStockStrategy:
         # Create a copy of the data to avoid modifying the original
         signals = data.copy()
         
-        # For ML mode, assume features are already present
+        # For ML mode, ensure features are present
         if self.use_ml:
             # Train the model if not already trained
             if not self.is_trained:
                 self.train_model(signals, run_manager, symbol)
             
-            # Ensure only the required feature columns are used and in the correct order
-            feature_data = signals.loc[:, self.feature_columns].copy()
-            # Debug: log feature columns used for prediction
-            print(f"[DEBUG] Prediction feature columns: {list(feature_data.columns)}")
+            # Ensure only the required feature columns are used
+            feature_data = signals[self.feature_columns].copy()
             scaled_features = self.scaler.transform(feature_data)
             
             # Generate probability predictions
@@ -127,9 +150,9 @@ class SingleStockStrategy:
                            f"Sell: {signals['Sell_Probability'].mean():.2f}, "
                            f"Hold: {signals['Hold_Probability'].mean():.2f}")
         else:
-            # Moving Average Crossover signal generation (requires raw OHLCV data)
-            signals['MA_short'] = signals['Close'].rolling(window=self.short_window, min_periods=1).mean()
-            signals['MA_long'] = signals['Close'].rolling(window=self.long_window, min_periods=1).mean()
+            # Moving Average Crossover signal generation
+            signals['MA_short'] = signals['close'].rolling(window=self.short_window, min_periods=1).mean()
+            signals['MA_long'] = signals['close'].rolling(window=self.long_window, min_periods=1).mean()
             signals['ma_diff'] = signals['MA_short'] - signals['MA_long']
             signals['Signal'] = np.where(signals['ma_diff'] > 0, 1, -1)
             
@@ -165,12 +188,8 @@ class SingleStockStrategy:
         for i in range(len(signals)):
             current_time = signals.index[i]
             next_time = signals.index[i+1] if i+1 < len(signals) else None
-            price_val = safe_decimal(signals['Price'].iloc[i])
-            # For ML mode, use Volume_MA_5 as a proxy for volume
-            if self.use_ml:
-                volume = safe_decimal(signals['Volume_MA_5'].iloc[i])
-            else:
-                volume = safe_decimal(signals['Volume'].iloc[i])
+            price_val = safe_decimal(signals['close'].iloc[i])
+            volume = safe_decimal(signals['volume'].iloc[i])
             
             # Check for end of day position closing
             if current_position == 1 and is_end_of_day(current_time, next_time):

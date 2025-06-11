@@ -6,7 +6,7 @@ import pandas as pd
 class RunManager:
     def __init__(self):
         self.run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.run_dir = f"run_{self.run_timestamp}"
+        self.run_dir = os.path.join("logs", f"run_{self.run_timestamp}")
         os.makedirs(self.run_dir, exist_ok=True)
     
     def setup_logging(self, symbol):
