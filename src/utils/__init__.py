@@ -1,1 +1,7 @@
-"""Utility modules for the trading system.""" 
+"""
+Utility modules for the trading system.
+"""
+
+from .run_manager import RunManager
+
+__all__ = ['RunManager'] 
