@@ -54,5 +54,16 @@ AlgoTradingModels/
 - Use Git for version control. Commit changes with clear, descriptive messages.
 - Avoid committing unnecessary files (e.g., logs, cache files, virtual environment).
 
+### 7. **Handling Requests in Cursor**
+- **When Asked to "Plan"**:  
+  - Do not update the code.  
+  - Only show what changes will be made (e.g., "I will modify X to do Y").  
+  - Provide a clear outline of the proposed changes.
+
+- **When Asked to "Fix" or "Build"**:  
+  - Make the changes directly in the code.  
+  - Run `run_strategy.py` and all tests to verify nothing is broken.  
+  - Only push the code if all tests pass and the strategy runs successfully.
+
 ## Conclusion
 Following these guidelines will help maintain a clean, maintainable, and scalable codebase. If you have any questions or suggestions, please raise them in the project discussions. 
