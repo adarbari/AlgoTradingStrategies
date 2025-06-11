@@ -101,6 +101,13 @@ class FeatureStore:
         if not missing_ranges:
             return []
             
+        # Check if we have complete coverage
+        if cache_ranges:
+            min_start = min(r[0] for r in cache_ranges)
+            max_end = max(r[1] for r in cache_ranges)
+            if min_start <= start_date and max_end >= end_date:
+                return []
+        
         return missing_ranges
     
     def get_cached_features(
@@ -174,6 +181,9 @@ class FeatureStore:
                 return None
             # Only keep the requested features that are available
             result = result[available_features]
+            # Verify we have all requested features
+            if set(features) != set(available_features):
+                return None
         
         return result
     
