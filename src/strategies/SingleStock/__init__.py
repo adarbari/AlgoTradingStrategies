@@ -2,6 +2,10 @@
 Single stock trading strategy implementation.
 """
 
-from .single_stock_strategy import SingleStockStrategy
+from .random_forest_strategy import RandomForestSingleStockStrategy
+from .ma_crossover_strategy import MACrossOverSingleStockStrategy
 
-__all__ = ['SingleStockStrategy'] 
+__all__ = [
+    'RandomForestSingleStockStrategy',
+    'MACrossOverSingleStockStrategy',
+] 

@@ -2,7 +2,7 @@ import argparse
 from datetime import datetime
 import logging
 from src.data.vendors.polygon_provider import PolygonProvider
-from src.strategies.SingleStock.single_stock_strategy import SingleStockStrategy
+from src.strategies.SingleStock import RandomForestSingleStockStrategy, MACrossOverSingleStockStrategy
 from src.utils.run_manager import RunManager
 from src.helpers.logger import TradingLogger
 import os
@@ -39,11 +39,11 @@ def main():
             logger.error("No data received from provider")
             return
 
-        # Initialize strategy
-        strategy = SingleStockStrategy(
-            use_ml=(args.strategy == 'ml'),
-            cache_dir=args.cache_dir
-        )
+        # Initialize strategy based on the --strategy argument
+        if args.strategy == 'ml':
+            strategy = RandomForestSingleStockStrategy(cache_dir=args.cache_dir)
+        else:
+            strategy = MACrossOverSingleStockStrategy(cache_dir=args.cache_dir)
 
         # Initialize run manager and trading logger
         run_manager = RunManager()
