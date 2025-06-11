@@ -49,5 +49,10 @@ AlgoTradingModels/
 - Use Git for version control. Commit changes with clear, descriptive messages.
 - Avoid committing unnecessary files (e.g., logs, cache files, virtual environment).
 
+## Testing Guidelines
+- All test files (unit, integration, and functional tests) should be placed in the `tests/` directory.
+- Do not place test files in source or script directories.
+- This ensures a clean separation between production code and tests, and makes test discovery easier for CI/CD and developers.
+
 ## Conclusion
 Following these guidelines will help maintain a clean, maintainable, and scalable codebase. If you have any questions or suggestions, please raise them in the project discussions. 

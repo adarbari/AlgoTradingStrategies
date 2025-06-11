@@ -2,6 +2,6 @@
 Utility modules for the trading system.
 """
 
-from .run_manager import RunManager
+from .run_manager import StrategyManager
 
-__all__ = ['RunManager'] 
+__all__ = ['StrategyManager'] 

@@ -9,24 +9,37 @@ import json
 import numpy as np
 
 class TradingLogger:
-    def __init__(self, run_dir: Optional[str] = None):
-        self.run_dir = run_dir or os.path.join("logs", f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+    def __init__(self):
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.run_timestamp_dir = os.path.join(os.getcwd(), "logs", f"run_{timestamp}")
+        os.makedirs(self.run_timestamp_dir, exist_ok=True)
+        # Initialize log files under the timestamped directory
+        self.trades_file = os.path.join(self.run_timestamp_dir, "trades.csv")
+        self.periods_file = os.path.join(self.run_timestamp_dir, "periods.csv")
+        self.portfolio_file = os.path.join(self.run_timestamp_dir, "portfolio_values.csv")
+        # Create headers if files don't exist
+        if not os.path.exists(self.trades_file):
+            pd.DataFrame(columns=['symbol', 'trade_type', 'price', 'shares', 'timestamp', 'profit', 'portfolio_value']).to_csv(self.trades_file, index=False)
+        if not os.path.exists(self.periods_file):
+            pd.DataFrame(columns=['symbol', 'timestamp', 'open', 'high', 'low', 'close', 'volume', 'signal', 'returns', 'strategy_returns']).to_csv(self.periods_file, index=False)
+        if not os.path.exists(self.portfolio_file):
+            pd.DataFrame(columns=['symbol', 'timestamp', 'portfolio_value']).to_csv(self.portfolio_file, index=False)
         self._setup_logging()
         self.logger = logging.getLogger(__name__)
         self.last_timestamp = None
         
     def _setup_logging(self):
         """Setup logging directory and configuration"""
-        os.makedirs(self.run_dir, exist_ok=True)
-        os.makedirs(os.path.join(self.run_dir, "logs"), exist_ok=True)
-        os.makedirs(os.path.join(self.run_dir, "visualizations"), exist_ok=True)
+        os.makedirs(self.run_timestamp_dir, exist_ok=True)
+        os.makedirs(os.path.join(self.run_timestamp_dir, "logs"), exist_ok=True)
+        os.makedirs(os.path.join(self.run_timestamp_dir, "visualizations"), exist_ok=True)
         
         # Setup logging configuration
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
             handlers=[
-                logging.FileHandler(os.path.join(self.run_dir, "logs", "trading.log")),
+                logging.FileHandler(os.path.join(self.run_timestamp_dir, "logs", "trading.log")),
                 logging.StreamHandler()
             ]
         )
@@ -44,23 +57,21 @@ class TradingLogger:
             return float(val) if pd.notnull(val) else None
         def safe_int(val, default=0):
             return int(val) if pd.notnull(val) else default
-        trade_info = {
-            "symbol": symbol,
-            "type": trade_type,
-            "price": safe_float(price),
-            "shares": safe_int(shares),
-            "timestamp": ts_str,
-            "profit": safe_float(profit),
-            "portfolio_value": safe_float(portfolio_value)
+        trade_data = {
+            'symbol': symbol,
+            'trade_type': trade_type,
+            'price': safe_float(price),
+            'shares': safe_int(shares),
+            'timestamp': ts_str,
+            'profit': safe_float(profit),
+            'portfolio_value': safe_float(portfolio_value)
         }
         
         # Log to file
-        self.logger.info(f"Trade: {json.dumps(trade_info)}")
+        self.logger.info(f"Trade: {json.dumps(trade_data)}")
         
         # Append to trades CSV
-        trades_file = os.path.join(self.run_dir, "logs", "trades.csv")
-        trade_df = pd.DataFrame([trade_info])
-        trade_df.to_csv(trades_file, mode='a', header=not os.path.exists(trades_file), index=False)
+        pd.DataFrame([trade_data]).to_csv(self.trades_file, mode='a', header=False, index=False)
         
     def log_period(self, symbol: str, timestamp: datetime, data: Dict):
         """Log period information (e.g., OHLCV, indicators, signals)"""
@@ -90,9 +101,7 @@ class TradingLogger:
         self.logger.info(f"Period: {json.dumps(period_data)}")
         
         # Append to periods CSV
-        periods_file = os.path.join(self.run_dir, "logs", "periods.csv")
-        period_df = pd.DataFrame([period_data])
-        period_df.to_csv(periods_file, mode='a', header=not os.path.exists(periods_file), index=False)
+        pd.DataFrame([period_data]).to_csv(self.periods_file, mode='a', header=False, index=False)
         
     def log_portfolio_value(self, symbol: str, timestamp: datetime, portfolio_value: float):
         """Log portfolio value"""
@@ -103,19 +112,17 @@ class TradingLogger:
             ts_str = str(timestamp)
         def safe_float(val):
             return float(val) if pd.notnull(val) else None
-        value_info = {
-            "symbol": symbol,
-            "timestamp": ts_str,
-            "portfolio_value": safe_float(portfolio_value)
+        portfolio_data = {
+            'symbol': symbol,
+            'timestamp': ts_str,
+            'portfolio_value': safe_float(portfolio_value)
         }
         
         # Log to file
-        self.logger.info(f"Portfolio Value: {json.dumps(value_info)}")
+        self.logger.info(f"Portfolio Value: {json.dumps(portfolio_data)}")
         
         # Append to portfolio values CSV
-        values_file = os.path.join(self.run_dir, "logs", "portfolio_values.csv")
-        value_df = pd.DataFrame([value_info])
-        value_df.to_csv(values_file, mode='a', header=not os.path.exists(values_file), index=False)
+        pd.DataFrame([portfolio_data]).to_csv(self.portfolio_file, mode='a', header=False, index=False)
         
         self.last_timestamp = timestamp
         
@@ -130,7 +137,7 @@ class TradingLogger:
         plt.tight_layout()
         
         # Save plot
-        plt.savefig(os.path.join(self.run_dir, "visualizations", f"{symbol}_portfolio_performance.png"))
+        plt.savefig(os.path.join(self.run_timestamp_dir, f"{symbol}_portfolio_performance.png"))
         plt.close()
         
     def plot_trade_distribution(self, symbol: str, trades: pd.DataFrame):
@@ -145,7 +152,7 @@ class TradingLogger:
         plt.tight_layout()
         
         # Save plot
-        plt.savefig(os.path.join(self.run_dir, "visualizations", f"{symbol}_trade_distribution.png"))
+        plt.savefig(os.path.join(self.run_timestamp_dir, f"{symbol}_trade_distribution.png"))
         plt.close()
         
     def generate_performance_report(self, symbol: str, trades: pd.DataFrame, 
@@ -166,11 +173,12 @@ class TradingLogger:
             "min_profit": trades[profit_col].min(),
             "final_portfolio_value": portfolio_values[pv_col].iloc[-1],
             "initial_portfolio_value": portfolio_values[pv_col].iloc[0],
-            "portfolio_return": (portfolio_values[pv_col].iloc[-1] / portfolio_values[pv_col].iloc[0] - 1) * 100 if portfolio_values.shape[0] > 1 else 0
+            "portfolio_return": (portfolio_values[pv_col].iloc[-1] / portfolio_values[pv_col].iloc[0] - 1) * 100 if portfolio_values.shape[0] > 1 else 0,
+            "generated_at": datetime.now().isoformat()
         }
         
         # Save report
-        report_file = os.path.join(self.run_dir, "logs", f"{symbol}_performance_report.json")
+        report_file = os.path.join(self.run_timestamp_dir, f"{symbol}_performance_report.json")
         with open(report_file, 'w') as f:
             json.dump(report, f, indent=4)
         

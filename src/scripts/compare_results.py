@@ -1,11 +1,11 @@
 import os
 import re
 import pandas as pd
-import matplotlib.pyplot as plt
 from datetime import datetime
 import sys
 from collections import namedtuple
 from src.strategies.SingleStock.single_stock_strategy import SingleStockStrategy
+from src.visualization.portfolio_visualizer import plot_strategy_comparison
 
 # Add the parent directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -70,27 +70,24 @@ def parse_trade_file(file_path, run_timestamp):
     )
 
 def compare_results():
-    logs_dir = 'logs'
-    run_dirs = []
-    if os.path.exists(logs_dir):
-        run_dirs = [os.path.join(logs_dir, d) for d in os.listdir(logs_dir) if os.path.isdir(os.path.join(logs_dir, d)) and d.startswith('run_')]
-    if not run_dirs:
-        print("No run directories found!")
-        return
-    symbol_files = {}
-    for run_dir in run_dirs:
-        # Extract timestamp from run_dir name
-        match = re.search(r'run_(\d{8}_\d{6})', run_dir)
-        run_timestamp = datetime.strptime(match.group(1), '%Y%m%d_%H%M%S') if match else None
-        for file in os.listdir(run_dir):
+    """Compare results from different backtest runs."""
+    # Get all trade files
+    trade_files = []
+    for root, dirs, files in os.walk('logs'):
+        for file in files:
             if file.endswith('_trades.txt'):
-                symbol = file.split('_')[0]
-                if symbol not in symbol_files:
-                    symbol_files[symbol] = []
-                symbol_files[symbol].append((os.path.join(run_dir, file), run_timestamp))
-    if not symbol_files:
-        print("No trade files found in run directories!")
-        return
+                trade_files.append(os.path.join(root, file))
+    
+    # Group files by symbol
+    symbol_files = {}
+    for file in trade_files:
+        symbol = os.path.basename(file).split('_')[0]
+        run_timestamp = datetime.strptime(os.path.basename(os.path.dirname(file)), 'run_%Y%m%d_%H%M%S')
+        if symbol not in symbol_files:
+            symbol_files[symbol] = []
+        symbol_files[symbol].append((file, run_timestamp))
+    
+    # Compare results for each symbol
     for symbol, files in symbol_files.items():
         print(f"\n=== {symbol} Backtest Results Comparison ===\n")
         results = []
@@ -115,26 +112,11 @@ def compare_results():
         df = df.sort_values('Timestamp')
         print("Summary Statistics:")
         print(df.to_string(index=False))
-        plt.figure(figsize=(12, 6))
-        plt.subplot(2, 2, 1)
-        plt.bar(range(len(df)), df['Total Return'])
-        plt.title('Total Return (%)')
-        plt.xticks(range(len(df)), [ts.strftime('%Y-%m-%d\n%H:%M:%S') for ts in df['Timestamp']], rotation=45)
-        plt.subplot(2, 2, 2)
-        plt.bar(range(len(df)), df['Win Rate'])
-        plt.title('Win Rate (%)')
-        plt.xticks(range(len(df)), [ts.strftime('%Y-%m-%d\n%H:%M:%S') for ts in df['Timestamp']], rotation=45)
-        plt.subplot(2, 2, 3)
-        plt.bar(range(len(df)), df['Number of Trades'])
-        plt.title('Number of Trades')
-        plt.xticks(range(len(df)), [ts.strftime('%Y-%m-%d\n%H:%M:%S') for ts in df['Timestamp']], rotation=45)
-        plt.subplot(2, 2, 4)
-        plt.bar(range(len(df)), df['Total Profit'])
-        plt.title('Total Profit ($)')
-        plt.xticks(range(len(df)), [ts.strftime('%Y-%m-%d\n%H:%M:%S') for ts in df['Timestamp']], rotation=45)
-        plt.tight_layout()
-        plt.savefig(f'{symbol}_backtest_comparison.png')
-        print(f"\nComparison chart saved as '{symbol}_backtest_comparison.png'")
+        
+        # Plot comparison using the new visualization module
+        save_path = f'{symbol}_backtest_comparison.png'
+        plot_strategy_comparison(symbol, df.to_dict('records'), save_path)
+        print(f"\nComparison chart saved as '{save_path}'")
 
 if __name__ == '__main__':
     compare_results() 

@@ -2,8 +2,8 @@
 Helper utilities for the trading system.
 """
 
-from .run_manager import RunManager
+from .logger import TradingLogger
 
 __all__ = [
-    'RunManager'
+    'TradingLogger'
 ] 
