@@ -45,3 +45,10 @@ You can modify the following parameters in the code:
 - List of symbols to test
 - Date range for backtesting
 - Visualization settings 
+
+# AlgoTradingModels
+
+This project contains algorithmic trading models and strategies.
+
+## Recent Update
+- Updated workflow to use Python 3.9, 3.10, and 3.11 for CI/CD. 
