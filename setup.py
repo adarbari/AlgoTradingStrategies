@@ -1,35 +1,15 @@
 from setuptools import setup, find_packages
 
-with open("README.md", "r", encoding="utf-8") as fh:
-    long_description = fh.read()
-
-with open("requirements.txt", "r", encoding="utf-8") as fh:
-    requirements = fh.read().splitlines()
-
 setup(
-    name="algo-trading-models",
+    name="algo_trading_models",
     version="0.1.0",
-    author="Adarbari",
-    author_email="your.email@example.com",
-    description="Algorithmic Trading Models and Strategies",
-    long_description=long_description,
-    long_description_content_type="text/markdown",
-    url="https://github.com/adarbari/AlgoTradingStrategies",
     packages=find_packages(),
-    classifiers=[
-        "Development Status :: 3 - Alpha",
-        "Intended Audience :: Financial and Insurance Industry",
-        "License :: OSI Approved :: MIT License",
-        "Operating System :: OS Independent",
-        "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: 3.10",
+    install_requires=[
+        "pandas>=1.3.0",
+        "numpy>=1.20.0",
+        "scikit-learn>=0.24.0",
+        "yfinance>=0.2.36",
+        "ta>=0.10.0",
     ],
     python_requires=">=3.9",
-    install_requires=requirements,
-    entry_points={
-        "console_scripts": [
-            "run-strategy=scripts.run_strategy:main",
-        ],
-    },
 ) 

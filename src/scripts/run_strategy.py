@@ -1,54 +1,77 @@
 import argparse
-from datetime import datetime, timedelta
-import pandas as pd
-from src.data import PolygonProvider
-from src.features import TechnicalIndicators
-from src.strategies.SingleStock.single_stock_strategy import SingleStockStrategy
-from src.helpers.logger import TradingLogger
+from datetime import datetime
 import logging
-
-def run_strategy(symbol: str, strategy_type: str, start_date: str, end_date: str):
-    """Run the trading strategy for a given symbol and date range."""
-    # Initialize components
-    data_provider = PolygonProvider()
-    feature_engineer = TechnicalIndicators()
-    strategy = SingleStockStrategy(use_ml=(strategy_type == 'ml'))
-    logger = TradingLogger()
-    
-    # Fetch historical data
-    df = data_provider.get_historical_data(symbol, start_date, end_date)
-    if df.empty:
-        print(f"No data available for {symbol}")
-        return
-    
-    # Debug: Print DataFrame info
-    print("\nDataFrame Info:")
-    print(f"Columns: {df.columns.tolist()}")
-    print(f"Shape: {df.shape}")
-    print("\nFirst few rows:")
-    print(df.head())
-    
-    # Calculate features
-    df = feature_engineer.calculate_features(df)
-    
-    # Generate signals and run strategy
-    signals = strategy.generate_signals(df, logger, symbol)
-    
-    # Log results
-    logger.plot_portfolio_performance(f"{symbol}_{strategy_type}", signals[['Portfolio_Value']])
-    trades = signals[signals['Signal'] != 0]
-    if not trades.empty:
-        logger.plot_trade_distribution(f"{symbol}_{strategy_type}", trades)
+from src.data.vendors.polygon_provider import PolygonProvider
+from src.strategies.SingleStock.single_stock_strategy import SingleStockStrategy
+from src.utils.run_manager import RunManager
 
 def main():
     parser = argparse.ArgumentParser(description='Run trading strategy')
-    parser.add_argument('--symbol', required=True, help='Stock symbol')
-    parser.add_argument('--strategy', required=True, choices=['ml', 'ma'], help='Strategy type')
-    parser.add_argument('--start-date', required=True, help='Start date (YYYY-MM-DD)')
-    parser.add_argument('--end-date', required=True, help='End date (YYYY-MM-DD)')
-    
+    parser.add_argument('--symbol', type=str, required=True, help='Stock symbol')
+    parser.add_argument('--strategy', type=str, choices=['ml', 'ma'], default='ml', help='Strategy type (ml or ma)')
+    parser.add_argument('--start-date', type=str, required=True, help='Start date (YYYY-MM-DD)')
+    parser.add_argument('--end-date', type=str, required=True, help='End date (YYYY-MM-DD)')
+    parser.add_argument('--cache-dir', type=str, default='feature_cache', help='Directory for feature cache')
     args = parser.parse_args()
-    run_strategy(args.symbol, args.strategy, args.start_date, args.end_date)
+
+    # Set up logging
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+
+    try:
+        # Initialize data provider
+        data_provider = PolygonProvider()
+
+        # Fetch historical data
+        logger.info(f"Fetching historical data for {args.symbol}")
+        data = data_provider.get_historical_data(
+            symbol=args.symbol,
+            start_date=datetime.strptime(args.start_date, '%Y-%m-%d'),
+            end_date=datetime.strptime(args.end_date, '%Y-%m-%d')
+        )
+
+        if data is None or data.empty:
+            logger.error("No data received from provider")
+            return
+
+        # Initialize strategy
+        strategy = SingleStockStrategy(
+            use_ml=(args.strategy == 'ml'),
+            cache_dir=args.cache_dir
+        )
+
+        # Initialize run manager
+        run_manager = RunManager()
+
+        # Generate signals
+        logger.info(f"Generating signals using {args.strategy.upper()} strategy")
+        signals = strategy.generate_signals(data, run_manager, args.symbol)
+
+        if signals is None or signals.empty:
+            logger.error("No signals generated")
+            return
+
+        # Log results
+        logger.info("\nStrategy Results:")
+        logger.info(f"Total trades: {len(signals[signals['signal'] != 0])}")
+        logger.info(f"Buy signals: {len(signals[signals['signal'] == 1])}")
+        logger.info(f"Sell signals: {len(signals[signals['signal'] == -1])}")
+        
+        if 'Trade_Profit' in signals.columns:
+            total_profit = signals['Trade_Profit'].sum()
+            logger.info(f"Total profit: ${total_profit:.2f}")
+
+        # Save results
+        output_file = f"results_{args.symbol}_{args.strategy}_{args.start_date}_{args.end_date}.csv"
+        signals.to_csv(output_file)
+        logger.info(f"Results saved to {output_file}")
+
+        # Save trades and portfolio logs
+        run_manager.save_logs(args.symbol)
+
+    except Exception as e:
+        logger.error(f"Error running strategy: {str(e)}")
+        raise
 
 if __name__ == '__main__':
     main() 
