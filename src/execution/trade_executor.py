@@ -103,7 +103,7 @@ class TradeExecutor:
         executed_trades = []
         for trade in trades:
             try:
-                if self._execute_trade(trade):
+                if self._execute_trade(trade,timestamp):
                     executed_trades.append(trade)
                     logger.info("Executed trade: %s %s %.2f shares at $%.2f", 
                               trade.action, trade.symbol, trade.quantity, trade.price)
@@ -162,7 +162,7 @@ class TradeExecutor:
         
         return quantity
         
-    def _execute_trade(self, trade: Trade) -> bool:
+    def _execute_trade(self, trade: Trade, timestamp: datetime) -> bool:
         """Execute a trade through the portfolio manager"""
         try:
             # Validate position size before execution
@@ -176,14 +176,14 @@ class TradeExecutor:
                     trade.symbol,
                     trade.quantity,
                     trade.price,
-                    'buy'
+                    timestamp
                 )
             else:  # SELL
                 success = self.portfolio_manager.update_position(
                     trade.symbol,
-                    trade.quantity,
+                    - trade.quantity,
                     trade.price,
-                    'sell'
+                    timestamp
                 )
                 
             if success:

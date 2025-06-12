@@ -19,16 +19,6 @@ class FeatureStore:
         os.makedirs(cache_dir, exist_ok=True)
         self.technical_indicators = TechnicalIndicators()
     
-    def set_ma_windows(self, symbol: str, short_window: int, long_window: int) -> None:
-        """Set the moving average windows.
-        
-        Args:
-            symbol: Stock symbol
-            short_window: Short-term MA window
-            long_window: Long-term MA window
-        """
-        self.technical_indicators.set_ma_windows(symbol, short_window, long_window)
-    
     def calculate_and_cache_features(
         self,
         symbol: str,

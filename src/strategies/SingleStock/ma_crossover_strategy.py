@@ -59,9 +59,6 @@ class MACrossoverStrategy(BaseStrategy):
         print(f"Looking for features in cache: {symbol} from {start_date} to {end_date}")
         print(f"Cache directory: {self.cache_dir}")
         
-        # Set MA window
-        self.feature_store.set_ma_windows(symbol, self.short_window, self.long_window)
-        
         # Try to get cached features
         features = self.feature_store.get_cached_features(
             symbol, 
@@ -102,7 +99,7 @@ class MACrossoverStrategy(BaseStrategy):
         # Store current features for next comparison
         current_features = features.copy()
 
-        # Patch: Handle missing 'ma_short' or 'ma_long' gracefully
+        # Get 'ma_short' and 'ma_long' features from technical indicators
         ma_short = self.technical_indicators.FeatureNames.MA_SHORT
         ma_long = self.technical_indicators.FeatureNames.MA_LONG
         

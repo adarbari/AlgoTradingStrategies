@@ -141,16 +141,6 @@ class TechnicalIndicators(FeatureEngineer):
         self._short_window = 10
         self._long_window = 50
     
-    def set_ma_windows(self, short_window: int, long_window: int) -> None:
-        """Set the moving average windows.
-        
-        Args:
-            short_window: Short-term MA window
-            long_window: Long-term MA window
-        """
-        self._short_window = short_window
-        self._long_window = long_window
-    
     def calculate_features(
         self,
         data: pd.DataFrame,
