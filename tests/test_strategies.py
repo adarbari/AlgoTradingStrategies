@@ -148,7 +148,7 @@ def test_rf_strategy_generate_signals(rf_strategy, sample_data):
         end_date=sample_data.index.max().strftime('%Y-%m-%d')
     )
     # Pass only the last row as a dict, excluding 'close' and 'target'
-    last_row = features.iloc[-1].drop(['close', 'target']).to_dict()
+    last_row = features.iloc[-1].drop(['target']).to_dict()
     signals = rf_strategy.generate_signals(last_row, 'AAPL', datetime.now())
     assert isinstance(signals, StrategySignal)
     assert hasattr(signals, 'timestamp')
@@ -206,7 +206,7 @@ def test_rf_strategy_update(rf_strategy, sample_data):
         end_date=new_data.index.max().strftime('%Y-%m-%d')
     )
     # Pass only the last row as a dict, excluding 'close' and 'target'
-    last_row = features.iloc[-1].drop(['close', 'target']).to_dict()
+    last_row = features.iloc[-1].drop(['target']).to_dict()
     signals = rf_strategy.generate_signals(last_row, 'AAPL', datetime.now())
     assert isinstance(signals, StrategySignal)
 

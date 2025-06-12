@@ -63,8 +63,8 @@ class RandomForestStrategy(BaseStrategy):
         if self.model is None:
             features = self._get_training_features(data, symbol)
             
-            # Store feature columns for prediction (excluding target and close)
-            self.feature_columns = [col for col in features.columns if col not in ['target', 'close']]
+            # Store feature columns for prediction (excluding target)
+            self.feature_columns = [col for col in features.columns if col not in ['target']]
             
             # Select features for training
             X = features[self.feature_columns]

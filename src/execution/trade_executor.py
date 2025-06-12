@@ -58,8 +58,14 @@ class TradeExecutor:
             if symbol in self.strategies:
                 for strategy in self.strategies[symbol]:
                     try:
+                        #train the model with the data
                         strategy.train_model(data, symbol)
                         logger.info("Trained strategy %s for symbol %s", strategy.name, symbol)
+
+                        #plot the feature importance
+                        if hasattr(strategy, 'get_feature_importance'):
+                            feature_importance = strategy.get_feature_importance()
+                            self.trading_logger.plot_feature_importance(symbol, feature_importance)
                     except Exception as e:
                         logger.error("Error training strategy %s for symbol %s: %s", 
                                    strategy.name, symbol, str(e))

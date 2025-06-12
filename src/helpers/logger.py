@@ -269,4 +269,26 @@ class TradingLogger:
         returns_file = os.path.join(self.run_timestamp_dir, "returns.csv")
         df = pd.DataFrame([returns_data])
         df.to_csv(returns_file, index=False, mode='a', header=not os.path.exists(returns_file))
-        self.logger.info(f"Returns published to {returns_file}") 
+        self.logger.info(f"Returns published to {returns_file}")
+
+    def plot_feature_importance(self, symbol: str, feature_importance: pd.DataFrame):
+        """Plot feature importance for a symbol"""
+        plt.figure(figsize=(12, 6))
+        
+        # Plot horizontal bar chart
+        sns.barplot(data=feature_importance, x='importance', y='feature')
+        plt.title(f"Feature Importance - {symbol} ({self.current_phase})")
+        plt.xlabel("Importance Score")
+        plt.ylabel("Features")
+        plt.grid(True, axis='x')
+        plt.tight_layout()
+        
+        # Save plot in phase-specific visualizations directory
+        plt.savefig(os.path.join(self.phase_dirs[self.current_phase], "visualizations", f"{symbol}_feature_importance.png"))
+        plt.close()
+        
+        # Also save the feature importance data as CSV
+        feature_importance.to_csv(
+            os.path.join(self.phase_dirs[self.current_phase], "visualizations", f"{symbol}_feature_importance.csv"),
+            index=False
+        ) 
