@@ -56,19 +56,21 @@ class TradingSystem:
         self.end_date = end_date or datetime.now()
         self.initial_budget = initial_budget
         
-        # Initialize components
-        self.portfolio_manager = PortfolioManager(initial_budget)
+        # Initialize components that are phase-independent
         self.strategies = [
             MACrossoverStrategy(),
             RandomForestStrategy()
         ]
-        self.trade_executor = TradeExecutor(self.portfolio_manager, self.strategies)
+        self.logger = TradingLogger()
         # Initialize data cache and pass it to PolygonProvider
         self.data_cache = DataCache()
         self.data_fetcher = PolygonProvider(cache=self.data_cache)
         # Initialize feature store
         self.feature_store = FeatureStore()
-        self.logger = TradingLogger()
+        
+        # Phase-specific components will be initialized in run()
+        self.portfolio_manager = None
+        self.trade_executor = None
         
         # --- SplitManager integration ---
         if split_ratios is None:
@@ -146,6 +148,14 @@ class TradingSystem:
     def run(self, split_name: str = 'train') -> None:
         """Run the trading system for a specific split ('train', 'val', or 'test')."""
         logger.info(f"Starting trading system for split: {split_name}")
+        
+        # Set the appropriate phase in the logger
+        self.logger.set_phase(split_name)
+        
+        # Initialize phase-specific components
+        self.portfolio_manager = PortfolioManager(self.initial_budget)
+        self.trade_executor = TradeExecutor(self.portfolio_manager, self.strategies, trading_logger=self.logger)
+        
         split_data = self.get_data_for_split(split_name)
         # Get all unique timestamps in the split
         all_timestamps = set()
@@ -158,6 +168,22 @@ class TradingSystem:
             # Get current prices and features
             current_prices = self._get_current_prices(timestamp)
             current_features = self._get_current_features(timestamp, split_data)
+            
+            # Log period data for each symbol
+            for symbol, features in current_features.items():
+                if symbol in current_prices:
+                    period_data = {
+                        'open': features.get('open', current_prices[symbol]),
+                        'high': features.get('high', current_prices[symbol]),
+                        'low': features.get('low', current_prices[symbol]),
+                        'close': current_prices[symbol],
+                        'volume': features.get('volume', 0),
+                        'signal': features.get('signal', 0),
+                        'returns': features.get('returns', 0),
+                        'strategy_returns': features.get('strategy_returns', 0)
+                    }
+                    self.logger.log_period(symbol, timestamp, period_data)
+            
             # Update trade executor with current state
             self.trade_executor.update_prices(current_prices)
             self.trade_executor.update_features(current_features)
@@ -169,12 +195,33 @@ class TradingSystem:
                     f"Executed {trade.action} for {trade.symbol}: "
                     f"{trade.quantity} shares at ${trade.price:.2f}"
                 )
-            # Log portfolio summary
+            # Log portfolio value
             portfolio_value = self.portfolio_manager.get_portfolio_value()
             logger.info(
                 f"Portfolio value: ${portfolio_value:.2f} "
                 f"(Return: {((portfolio_value - self.initial_budget) / self.initial_budget) * 100:.2f}%)"
             )
+            
+    def get_results(self) -> Dict:
+        """Get trading results for the current phase.
+        
+        Returns:
+            Dictionary containing trading results and statistics
+        """
+        if self.portfolio_manager is None:
+            raise RuntimeError("No active portfolio manager. Run a phase first.")
+            
+        trade_history = self.portfolio_manager.get_trade_history()
+        summary = self.portfolio_manager.get_portfolio_summary()
+        
+        return {
+            'trade_history': trade_history,
+            'portfolio_summary': summary,
+            'final_value': summary['total_value'],
+            'return_pct': summary['return_pct'],
+            'num_trades': len(trade_history),
+            'positions': summary['positions']
+        }
 
     def _get_current_features(self, timestamp: datetime, split_data: Dict[str, pd.DataFrame]) -> Dict[str, Dict[str, float]]:
         """Get current features for all symbols at the given timestamp from split_data."""
@@ -196,32 +243,14 @@ class TradingSystem:
             latest_idx = data.index[mask][-1]
             prices[symbol] = data.loc[latest_idx, 'close']
         return prices
-        
-    def get_results(self) -> Dict:
-        """Get trading results.
-        
-        Returns:
-            Dictionary containing trading results and statistics
-        """
-        trade_history = self.portfolio_manager.get_trade_history()
-        summary = self.portfolio_manager.get_portfolio_summary()
-        
-        return {
-            'trade_history': trade_history,
-            'portfolio_summary': summary,
-            'final_value': summary['total_value'],
-            'return_pct': summary['return_pct'],
-            'num_trades': len(trade_history),
-            'positions': summary['positions']
-        }
 
 def main():
     # Example usage: run all splits
     trading_system = TradingSystem(
         symbols=['AAPL', 'MSFT'],
-        initial_budget=10000.0,
-        start_date=datetime(2023, 1, 1),
-        end_date=datetime(2023, 12, 31)
+        initial_budget=100000.0,
+        start_date=datetime(2024, 1, 1),
+        end_date=datetime(2024, 12, 31)
     )
     for split in ['train', 'val', 'test']:
         trading_system.run(split)

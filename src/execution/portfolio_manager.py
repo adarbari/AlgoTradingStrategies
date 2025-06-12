@@ -20,13 +20,22 @@ class PortfolioManager:
         self.cash = initial_budget
         self.positions: Dict[str, Dict] = {}  # {symbol: {'quantity': int, 'avg_price': float}}
         self.trade_history: List[Dict] = []
+        self.current_prices: Dict[str, float] = {}  # Store current market prices
+        
+    def update_prices(self, prices: Dict[str, float]):
+        """Update current market prices for portfolio value calculation."""
+        self.current_prices = prices
         
     def get_portfolio_value(self) -> float:
-        """Get current total portfolio value (cash + positions)."""
-        positions_value = sum(
-            pos['quantity'] * pos['avg_price'] 
-            for pos in self.positions.values()
-        )
+        """Get current total portfolio value (cash + positions at current market prices)."""
+        positions_value = 0.0
+        for symbol, position in self.positions.items():
+            if symbol in self.current_prices:
+                current_price = self.current_prices[symbol]
+                positions_value += position['quantity'] * current_price
+            else:
+                # Fallback to average price if current price not available
+                positions_value += position['quantity'] * position['avg_price']
         return self.cash + positions_value
     
     def get_position(self, symbol: str) -> Optional[Dict]:

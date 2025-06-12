@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 from src.execution.portfolio_manager import PortfolioManager
 from src.strategies.base_strategy import BaseStrategy, StrategySignal
+from src.helpers.logger import TradingLogger
 import logging
 from collections import defaultdict
 
@@ -23,16 +24,18 @@ class TradeExecutor:
     """
     Orchestrates strategy signal generation, aggregates signals, decides trades, and executes them via PortfolioManager.
     """
-    def __init__(self, portfolio_manager: PortfolioManager, strategies: List[BaseStrategy]):
+    def __init__(self, portfolio_manager: PortfolioManager, strategies: List[BaseStrategy], trading_logger: Optional[TradingLogger] = None):
         self.portfolio_manager = portfolio_manager
         self.strategies = strategies
         self.current_prices: Dict[str, float] = {}
         self.current_features: Dict[str, Dict[str, float]] = {}  # symbol -> features
+        self.trading_logger = trading_logger if trading_logger is not None else TradingLogger()
         logger.info("TradeExecutor initialized with %d strategies", len(strategies))
 
     def update_prices(self, prices: Dict[str, float]):
         """Update current market prices"""
         self.current_prices = prices
+        self.portfolio_manager.update_prices(prices)  # Update prices in portfolio manager
         logger.debug("Updated prices for %d symbols", len(prices))
         
     def update_features(self, features: Dict[str, Dict[str, float]]):
@@ -188,6 +191,16 @@ class TradeExecutor:
                 
             if success:
                 logger.info("Successfully executed %s trade for %s", trade.action, trade.symbol)
+                # Log the trade to CSV
+                portfolio_value = self.portfolio_manager.get_portfolio_value()
+                self.trading_logger.log_trade(
+                    symbol=trade.symbol,
+                    trade_type=trade.action,
+                    price=trade.price,
+                    shares=trade.quantity,
+                    timestamp=timestamp,
+                    portfolio_value=portfolio_value
+                )
             else:
                 logger.warning("Failed to execute %s trade for %s", trade.action, trade.symbol)
             return success

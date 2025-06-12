@@ -60,13 +60,6 @@ def test_strategy_manager():
             profit=profit,
             portfolio_value=portfolio_value
         )
-        
-        # Log portfolio value
-        strategy_manager.log_portfolio_value(
-            symbol=symbol,
-            timestamp=date,
-            portfolio_value=portfolio_value
-        )
     
     # Test strategy summary
     summary = strategy_manager.get_strategy_summary()
@@ -98,20 +91,9 @@ def test_strategy_manager():
     
     # Verify files were created
     run_dir = strategy_manager.run_dir
-    print(f"\nVerifying files in {run_dir}:")
-    expected_files = [
-        'trades.csv',
-        'periods.csv',
-        'portfolio_values.csv',
-        f'{symbol}_strategy_comparison.txt'
-    ]
-    
-    for file in expected_files:
-        file_path = os.path.join(run_dir, file)
-        exists = os.path.exists(file_path)
-        print(f"{file}: {'✓' if exists else '✗'}")
-    
-    print("\nTest completed!")
+    train_trades_path = os.path.join(run_dir, "train", "trades.csv")
+    assert os.path.exists(run_dir), "Run directory not created"
+    assert os.path.exists(train_trades_path), "Trades file not created in train phase directory"
 
 if __name__ == '__main__':
     test_strategy_manager() 
