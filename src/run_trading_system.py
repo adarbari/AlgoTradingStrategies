@@ -18,7 +18,7 @@ from src.strategies.SingleStock.ma_crossover_strategy import MACrossoverStrategy
 from src.strategies.SingleStock.random_forest_strategy import RandomForestStrategy
 from src.data.vendors.polygon_provider import PolygonProvider
 from src.data.base import DataCache
-from src.features.feature_provider import FeatureProvider
+from src.features.feature_store import FeatureStore
 from src.helpers.logger import TradingLogger
 
 # Configure logging
@@ -61,8 +61,8 @@ class TradingSystem:
         # Initialize data cache and pass it to PolygonProvider
         self.data_cache = DataCache()
         self.data_fetcher = PolygonProvider(cache=self.data_cache)
-        # Initialize feature provider with its own cache
-        self.feature_provider = FeatureProvider()
+        # Initialize feature store
+        self.feature_store = FeatureStore()
         self.logger = TradingLogger()
         
         # Load historical data and calculate features
@@ -96,12 +96,9 @@ class TradingSystem:
         features = {}
         for symbol, data in self.historical_data.items():
             try:
-                # Get date range for the data
                 start_date = data.index.min().strftime('%Y-%m-%d')
                 end_date = data.index.max().strftime('%Y-%m-%d')
-                
-                # Get features using the feature provider
-                features_df = self.feature_provider.get_features(
+                features_df = self.feature_store.get_features(
                     symbol=symbol,
                     data=data,
                     start_date=start_date,

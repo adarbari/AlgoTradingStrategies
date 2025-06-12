@@ -304,4 +304,44 @@ class FeatureStore:
         start_dt = datetime.strptime(start_date, '%Y-%m-%d')
         end_dt = datetime.strptime(end_date, '%Y-%m-%d')
         missing_ranges = self._find_missing_date_ranges(symbol, start_dt, end_dt)
-        return [(d1.strftime('%Y-%m-%d'), d2.strftime('%Y-%m-%d')) for d1, d2 in missing_ranges] 
+        return [(d1.strftime('%Y-%m-%d'), d2.strftime('%Y-%m-%d')) for d1, d2 in missing_ranges]
+
+    def get_features(
+        self,
+        symbol: str,
+        data: pd.DataFrame,
+        start_date: str,
+        end_date: str
+    ) -> pd.DataFrame:
+        """Get features for a symbol, using cache if available. If not, calculate and cache them.
+        Args:
+            symbol: Stock symbol
+            data: Price data
+            start_date: Start date in YYYY-MM-DD format
+            end_date: End date in YYYY-MM-DD format
+        Returns:
+            DataFrame with features
+        """
+        features_df = self.get_cached_features(
+            symbol=symbol,
+            start_date=start_date,
+            end_date=end_date
+        )
+        if features_df is None:
+            features_df = self.technical_indicators.calculate_features(
+                data,
+                None,  # Calculate all available features
+                symbol=symbol
+            )
+            if 'target' in data.columns:
+                features_df['target'] = data['target']
+            self.cache_features(
+                symbol=symbol,
+                start_date=start_date,
+                end_date=end_date,
+                features_df=features_df
+            )
+        else:
+            if 'target' in data.columns and 'target' not in features_df.columns:
+                features_df['target'] = data['target']
+        return features_df 

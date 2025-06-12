@@ -33,9 +33,7 @@ def mock_feature_store():
     """Create a mock FeatureStore for testing."""
     mock_store = Mock(spec=FeatureStore)
     technical_indicators = TechnicalIndicators()
-    
-    # Mock the get_cached_features method to return a DataFrame with required features
-    def mock_get_features(symbol, start_date, end_date):
+    def mock_get_features(symbol, data, start_date, end_date):
         dates = pd.date_range(start=start_date, end=end_date, freq='D')
         features = pd.DataFrame({
             'close': np.random.normal(150, 5, len(dates)),
@@ -47,8 +45,7 @@ def mock_feature_store():
             'target': np.random.choice([-1, 0, 1], len(dates))
         }, index=dates)
         return features
-    
-    mock_store.get_cached_features.side_effect = mock_get_features
+    mock_store.get_features.side_effect = mock_get_features
     return mock_store
 
 @pytest.fixture

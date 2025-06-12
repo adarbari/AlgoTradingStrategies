@@ -10,7 +10,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 
 from src.strategies.base_strategy import BaseStrategy, StrategySignal
-from src.features.feature_provider import FeatureProvider
+from src.features.feature_store import FeatureStore
 
 class RandomForestStrategy(BaseStrategy):
     """
@@ -40,7 +40,7 @@ class RandomForestStrategy(BaseStrategy):
         """
         super().__init__(name="Random_Forest")
         self.cache_dir = cache_dir
-        self.feature_provider = FeatureProvider()
+        self.feature_store = FeatureStore(cache_dir=cache_dir)
         self.n_estimators = n_estimators
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
@@ -64,8 +64,8 @@ class RandomForestStrategy(BaseStrategy):
         start_date = data.index.min().strftime('%Y-%m-%d')
         end_date = data.index.max().strftime('%Y-%m-%d')
         
-        # Get features using the feature provider
-        features = self.feature_provider.get_features(
+        # Get features using the feature store
+        features = self.feature_store.get_features(
             symbol=symbol,
             data=data,
             start_date=start_date,
