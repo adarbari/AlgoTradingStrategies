@@ -66,7 +66,7 @@ class TradingSystem:
         
         # Load historical data and calculate features
         self.historical_data = self._load_data()
-        self._calculate_and_cache_features()
+        self.features = self._calculate_and_cache_features()
         
     def _load_data(self) -> Dict[str, pd.DataFrame]:
         """Load historical data for all symbols using the data/vendor layer.
@@ -92,24 +92,39 @@ class TradingSystem:
 
     def _calculate_and_cache_features(self) -> None:
         """Calculate and cache features for all symbols."""
+        features = {}
         for symbol, data in self.historical_data.items():
             try:
-                # Calculate technical indicators
-                features_df = self.technical_indicators.calculate_features(data)
+                # Get date range for the data
+                start_date = data.index.min().strftime('%Y-%m-%d')
+                end_date = data.index.max().strftime('%Y-%m-%d')
                 
-                # Add price data to features
-                features_df['price'] = data['close']
-                
-                # Cache the features
-                self.feature_store.cache_features(
+                # Try to get features from cache first
+                features_df = self.feature_store.get_cached_features(
                     symbol=symbol,
-                    start_date=self.start_date.strftime('%Y-%m-%d'),
-                    end_date=self.end_date.strftime('%Y-%m-%d'),
-                    features_df=features_df
+                    start_date=start_date,
+                    end_date=end_date
                 )
-                logger.info(f"Cached features for {symbol}")
+                
+                # If no cached features found, calculate and cache them
+                if features_df is None:
+                    features_df = self.technical_indicators.calculate_features(
+                        data,
+                        None,  # Calculate all available features
+                        symbol=symbol
+                    )
+                    # Cache the calculated features
+                    self.feature_store.cache_features(
+                        symbol=symbol,
+                        start_date=start_date,
+                        end_date=end_date,
+                        features_df=features_df
+                    )
+                features[symbol] = features_df
             except Exception as e:
                 logger.error(f"Error calculating features for {symbol}: {str(e)}")
+                continue
+            return features
         
     def _get_current_features(self, timestamp: datetime) -> Dict[str, Dict[str, float]]:
         """Get current features for all symbols at the given timestamp.
@@ -121,35 +136,27 @@ class TradingSystem:
             Dictionary mapping symbols to their current features
         """
         features = {}
-        # Find the MA crossover strategy to get its window params
-        ma_strategy = None
-        for strat in self.strategies:
-            if hasattr(strat, 'short_window') and hasattr(strat, 'long_window'):
-                ma_strategy = strat
-                break
-        short_window = getattr(ma_strategy, 'short_window', 5)
-        long_window = getattr(ma_strategy, 'long_window', 20)
         for symbol, data in self.historical_data.items():
+            # Get data up to the current timestamp
             mask = data.index <= timestamp
             if not mask.any():
                 continue
-            latest_idx = data.index[mask][-1]
-            symbol_features = self.feature_store.get_cached_features(
-                symbol,
-                timestamp.strftime('%Y-%m-%d'),
-                timestamp.strftime('%Y-%m-%d')
-            )
-            if symbol_features is not None and not symbol_features.empty:
-                row = symbol_features.iloc[-1].to_dict()
-                short_col = f'sma_{short_window}'
-                long_col = f'sma_{long_window}'
-                if short_col in row:
-                    row['ma_short'] = row[short_col]
-                if long_col in row:
-                    row['ma_long'] = row[long_col]
-                features[symbol] = row
+                
+            # Get the latest data point
+            latest_data = data[mask].iloc[-1]
+            
+            # Get features from our cached features
+            if symbol in self.features:
+                symbol_features_df = self.features[symbol]
+                # Get features for the current timestamp
+                mask = symbol_features_df.index <= timestamp
+                if mask.any():
+                    features[symbol] = symbol_features_df[mask].iloc[-1].to_dict()
+                else:
+                    logger.warning(f"No features found for {symbol} at {timestamp}")
             else:
-                logger.warning(f"No features found for {symbol} at {timestamp}")
+                logger.warning(f"No cached features found for {symbol}")
+                
         return features
         
     def _get_current_prices(self, timestamp: datetime) -> Dict[str, float]:

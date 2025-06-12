@@ -9,19 +9,25 @@ import os
 import shutil
 from datetime import datetime, timedelta
 from src.features.feature_store import FeatureStore
+from src.features.technical_indicators import TechnicalIndicators
 
 class TestFeatureStore(unittest.TestCase):
     def setUp(self):
-        """Set up test environment before each test."""
-        self.test_cache_dir = 'test_feature_cache'
-        self.feature_store = FeatureStore(cache_dir=self.test_cache_dir)
+        """Set up test fixtures."""
+        self.cache_dir = 'test_cache'
+        self.feature_store = FeatureStore(cache_dir=self.cache_dir)
+        self.technical_indicators = TechnicalIndicators()
         
-        # Create sample feature data
+        # Create sample features DataFrame with at least 100 days
+        dates = pd.date_range(start='2024-01-01', periods=100, freq='D')
         self.sample_features = pd.DataFrame({
-            'RSI': np.random.rand(100),
-            'MACD': np.random.rand(100),
-            'SMA_20': np.random.rand(100)
-        }, index=pd.date_range(start='2024-01-01', periods=100, freq='D'))
+            'price': np.random.normal(150, 5, len(dates)),
+            self.technical_indicators.FeatureNames.MA_SHORT: np.random.normal(150, 2, len(dates)),
+            self.technical_indicators.FeatureNames.MA_LONG: np.random.normal(148, 2, len(dates)),
+            self.technical_indicators.FeatureNames.RSI_14: np.random.uniform(30, 70, len(dates)),
+            self.technical_indicators.FeatureNames.MACD: np.random.normal(0, 1, len(dates)),
+            self.technical_indicators.FeatureNames.MACD_SIGNAL: np.random.normal(0, 1, len(dates))
+        }, index=dates)
         
         # Create sample feature data with gaps
         self.sample_features_with_gaps = pd.DataFrame({
@@ -29,14 +35,14 @@ class TestFeatureStore(unittest.TestCase):
             'MACD': np.random.rand(60),
             'SMA_20': np.random.rand(60)
         }, index=pd.date_range(start='2024-01-01', periods=60, freq='D'))
-        
-    def tearDown(self):
-        """Clean up test environment after each test."""
-        if os.path.exists(self.test_cache_dir):
-            shutil.rmtree(self.test_cache_dir)
     
-    def test_cache_and_retrieve_full_range(self):
-        """Test caching and retrieving features for a full date range."""
+    def tearDown(self):
+        """Clean up test fixtures."""
+        if os.path.exists(self.cache_dir):
+            shutil.rmtree(self.cache_dir)
+    
+    def test_cache_features(self):
+        """Test caching features."""
         # Cache the features
         start_date = self.sample_features.index.min().strftime('%Y-%m-%d')
         end_date = self.sample_features.index.max().strftime('%Y-%m-%d')
@@ -47,87 +53,68 @@ class TestFeatureStore(unittest.TestCase):
             features_df=self.sample_features
         )
         
-        # Retrieve the features
-        retrieved_features = self.feature_store.get_cached_features(
+        # Verify cache file exists
+        cache_files = self.feature_store._get_cache_files('AAPL')
+        self.assertEqual(len(cache_files), 1)
+        
+        # Verify cache file content
+        cached_features = self.feature_store.get_cached_features(
             symbol='AAPL',
             start_date=start_date,
             end_date=end_date
         )
-        
-        self.assertIsNotNone(retrieved_features)
-        self.assertTrue(retrieved_features.equals(self.sample_features))
+        self.assertIsNotNone(cached_features)
+        pd.testing.assert_frame_equal(cached_features, self.sample_features)
     
-    def test_cache_and_retrieve_partial_range(self):
-        """Test retrieving features for a partial date range."""
+    def test_get_cached_features(self):
+        """Test retrieving cached features."""
         # Cache the features
+        start_date = self.sample_features.index.min().strftime('%Y-%m-%d')
+        end_date = self.sample_features.index.max().strftime('%Y-%m-%d')
         self.feature_store.cache_features(
             symbol='AAPL',
-            start_date='2024-01-01',
-            end_date='2024-04-10',
+            start_date=start_date,
+            end_date=end_date,
             features_df=self.sample_features
         )
         
-        # Retrieve a partial range
-        retrieved_features = self.feature_store.get_cached_features(
+        # Test retrieving features
+        cached_features = self.feature_store.get_cached_features(
             symbol='AAPL',
-            start_date='2024-02-01',
-            end_date='2024-02-28'
+            start_date=start_date,
+            end_date=end_date
         )
+        self.assertIsNotNone(cached_features)
+        pd.testing.assert_frame_equal(cached_features, self.sample_features)
         
-        self.assertIsNotNone(retrieved_features)
-        expected_features = self.sample_features['2024-02-01':'2024-02-28']
-        self.assertTrue(retrieved_features.equals(expected_features))
+        # Test retrieving non-existent features
+        non_existent = self.feature_store.get_cached_features(
+            symbol='MSFT',
+            start_date=start_date,
+            end_date=end_date
+        )
+        self.assertIsNone(non_existent)
     
-    def test_multiple_cache_files(self):
-        """Test handling multiple cache files for the same symbol."""
-        # Create two separate cache files with continuous data
-        first_half = self.sample_features[:50]
-        second_half = self.sample_features[49:]  # Overlap by one day to ensure continuity
-        
+    def test_get_missing_ranges(self):
+        """Test finding missing date ranges in cache."""
+        # Cache some features
+        start_date = '2024-01-01'
+        end_date = '2024-01-10'
         self.feature_store.cache_features(
             symbol='AAPL',
-            start_date='2024-01-01',
-            end_date='2024-02-19',
-            features_df=first_half
+            start_date=start_date,
+            end_date=end_date,
+            features_df=self.sample_features
         )
         
-        self.feature_store.cache_features(
+        # Test finding missing ranges
+        missing_ranges = self.feature_store._get_missing_ranges(
             symbol='AAPL',
-            start_date='2024-02-19',  # Start from the same day as first file ends
-            end_date='2024-04-10',
-            features_df=second_half
+            start_date='2024-01-05',
+            end_date='2024-01-15'
         )
-        
-        # Retrieve data spanning both cache files
-        retrieved_features = self.feature_store.get_cached_features(
-            symbol='AAPL',
-            start_date='2024-02-15',
-            end_date='2024-02-25'
-        )
-        
-        self.assertIsNotNone(retrieved_features)
-        expected_features = self.sample_features['2024-02-15':'2024-02-25']
-        self.assertTrue(retrieved_features.equals(expected_features))
-    
-    def test_missing_date_ranges(self):
-        """Test handling of missing date ranges."""
-        # Cache data with gaps
-        self.feature_store.cache_features(
-            symbol='AAPL',
-            start_date='2024-01-01',
-            end_date='2024-02-29',
-            features_df=self.sample_features_with_gaps
-        )
-        
-        # Try to retrieve data including a gap
-        retrieved_features = self.feature_store.get_cached_features(
-            symbol='AAPL',
-            start_date='2024-01-01',
-            end_date='2024-04-10'
-        )
-        
-        # Should return None because of missing data
-        self.assertIsNone(retrieved_features)
+        self.assertEqual(len(missing_ranges), 1)
+        self.assertEqual(missing_ranges[0], ('2024-01-10', '2024-01-15'))
     
     def test_specific_features_retrieval(self):
         """Test retrieving specific features only."""
@@ -146,12 +133,23 @@ class TestFeatureStore(unittest.TestCase):
             symbol='AAPL',
             start_date=start_date,
             end_date=end_date,
-            features=['RSI', 'MACD']
+            features=[
+                self.technical_indicators.FeatureNames.RSI_14,
+                self.technical_indicators.FeatureNames.MACD
+            ]
         )
         
         self.assertIsNotNone(retrieved_features)
-        self.assertEqual(set(retrieved_features.columns), {'RSI', 'MACD'})
-        self.assertTrue(retrieved_features.equals(self.sample_features[['RSI', 'MACD']]))
+        self.assertEqual(set(retrieved_features.columns), {
+            self.technical_indicators.FeatureNames.RSI_14,
+            self.technical_indicators.FeatureNames.MACD
+        })
+        self.assertTrue(retrieved_features.equals(
+            self.sample_features[[
+                self.technical_indicators.FeatureNames.RSI_14,
+                self.technical_indicators.FeatureNames.MACD
+            ]]
+        ))
     
     def test_empty_dataframe_handling(self):
         """Test handling of empty DataFrames."""

@@ -70,7 +70,7 @@ class RandomForestStrategy(BaseStrategy):
             raise ValueError(f"No features found in cache for {symbol} from {start_date} to {end_date}")
         
         # Store feature columns for prediction
-        self.feature_columns = [col for col in features.columns if col not in ['target', 'price']]
+        self.feature_columns = [col for col in features.columns if col not in ['target', 'close']]
         
         # Train model and fit scaler if not already done
         if self.model is None:
@@ -89,7 +89,7 @@ class RandomForestStrategy(BaseStrategy):
             data (pd.DataFrame): Training data with features and target
         """
         # Select features for training
-        feature_cols = [col for col in data.columns if col not in ['target', 'price']]
+        feature_cols = [col for col in data.columns if col not in ['target', 'close']]
         X = data[feature_cols]
         y = data['target']
         

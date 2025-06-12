@@ -6,6 +6,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from typing import Optional, List, Dict
+from src.features.technical_indicators import TechnicalIndicators
 
 # --- Helper Functions ---
 def _save_and_close(save_path: Optional[str] = None):
@@ -14,11 +15,11 @@ def _save_and_close(save_path: Optional[str] = None):
         plt.savefig(save_path)
     plt.close()
 
-def _find_column(df: pd.DataFrame, candidates: List[str]) -> Optional[str]:
-    """Return the first matching column name from candidates, or None."""
-    for col in candidates:
-        if col in df.columns:
-            return col
+def _find_column(df: pd.DataFrame, possible_names: List[str]) -> Optional[str]:
+    """Find a column in the DataFrame that matches any of the possible names."""
+    for name in possible_names:
+        if name in df.columns:
+            return name
     return None
 
 # --- Main Visualization Functions ---
@@ -80,15 +81,18 @@ def plot_backtest_results(
     plt.figure(figsize=(15, 10))
     # --- Price and Signals ---
     plt.subplot(2, 1, 1)
-    # Find moving average columns
-    ma_short_col = _find_column(df, ['MA_short', 'ma_short', 'short_ma', 'ma10', 'ma_10'])
-    ma_long_col = _find_column(df, ['MA_long', 'ma_long', 'long_ma', 'ma100', 'ma_100', 'ma50', 'ma_50'])
+    
+    # Get standardized feature names
+    technical_indicators = TechnicalIndicators()
+    ma_short = technical_indicators.FeatureNames.MA_SHORT
+    ma_long = technical_indicators.FeatureNames.MA_LONG
     price_col = _find_column(df, ['Price', 'close'])
     signal_col = _find_column(df, ['Signal', 'signal'])
-    if ma_short_col:
-        plt.plot(df.index, df[ma_short_col], label='Short MA', alpha=0.7)
-    if ma_long_col:
-        plt.plot(df.index, df[ma_long_col], label='Long MA', alpha=0.7)
+    
+    if ma_short in df.columns:
+        plt.plot(df.index, df[ma_short], label='Short MA', alpha=0.7)
+    if ma_long in df.columns:
+        plt.plot(df.index, df[ma_long], label='Long MA', alpha=0.7)
     if price_col:
         plt.plot(df.index, df[price_col], label='Price', alpha=0.5)
     # Plot buy and sell signals

@@ -49,7 +49,11 @@ class TestDataAndFeatures(unittest.TestCase):
         )
         
         # Test feature calculation
-        features = ['sma_20', 'rsi_14', 'macd']
+        features = [
+            self.feature_engineer.FeatureNames.SMA_20,
+            self.feature_engineer.FeatureNames.RSI_14,
+            self.feature_engineer.FeatureNames.MACD
+        ]
         df_with_features = self.feature_engineer.calculate_features(df, features)
         
         self.assertIsInstance(df_with_features, pd.DataFrame)
@@ -62,7 +66,7 @@ class TestDataAndFeatures(unittest.TestCase):
         self.assertTrue(all(feature in available_features for feature in features))
         
         # Test feature dependencies
-        dependencies = self.feature_engineer.get_feature_dependencies('sma_20')
+        dependencies = self.feature_engineer.get_feature_dependencies(self.feature_engineer.FeatureNames.SMA_20)
         self.assertIsInstance(dependencies, list)
         self.assertTrue('close' in dependencies)
     
@@ -86,9 +90,9 @@ class TestDataAndFeatures(unittest.TestCase):
         self.assertFalse(df.isnull().any().any())
         
         # Verify feature calculations
-        self.assertTrue(df_with_features['sma_20'].notna().any())
-        self.assertTrue(df_with_features['rsi_14'].notna().any())
-        self.assertTrue(df_with_features['macd'].notna().any())
+        self.assertTrue(df_with_features[self.feature_engineer.FeatureNames.SMA_20].notna().any())
+        self.assertTrue(df_with_features[self.feature_engineer.FeatureNames.RSI_14].notna().any())
+        self.assertTrue(df_with_features[self.feature_engineer.FeatureNames.MACD].notna().any())
 
 if __name__ == '__main__':
     unittest.main() 

@@ -4,6 +4,7 @@ from typing import List, Optional, Tuple, Dict
 import joblib
 from datetime import datetime
 import glob
+from .technical_indicators import TechnicalIndicators
 
 class FeatureStore:
     """Manages caching of calculated features with support for partial date ranges."""
@@ -16,40 +17,17 @@ class FeatureStore:
         """
         self.cache_dir = cache_dir
         os.makedirs(cache_dir, exist_ok=True)
-        self._ma_windows = {}  # Store MA windows for each symbol
+        self.technical_indicators = TechnicalIndicators()
     
     def set_ma_windows(self, symbol: str, short_window: int, long_window: int) -> None:
-        """Set the moving average windows for a symbol.
+        """Set the moving average windows.
         
         Args:
             symbol: Stock symbol
             short_window: Short-term MA window
             long_window: Long-term MA window
         """
-        self._ma_windows[symbol] = {
-            'short_window': short_window,
-            'long_window': long_window
-        }
-    
-    def _calculate_moving_averages(self, data: pd.DataFrame, symbol: str) -> pd.DataFrame:
-        """Calculate moving averages for a symbol.
-        
-        Args:
-            data: Price data
-            symbol: Stock symbol
-            
-        Returns:
-            DataFrame with moving averages
-        """
-        if symbol not in self._ma_windows:
-            raise ValueError(f"No MA windows set for {symbol}")
-            
-        windows = self._ma_windows[symbol]
-        features = pd.DataFrame(index=data.index)
-        features['price'] = data['close']  # Use 'close' column as price
-        features['ma_short'] = data['close'].rolling(window=windows['short_window']).mean()
-        features['ma_long'] = data['close'].rolling(window=windows['long_window']).mean()
-        return features
+        self.technical_indicators.set_ma_windows(symbol, short_window, long_window)
     
     def calculate_and_cache_features(
         self,
@@ -69,8 +47,15 @@ class FeatureStore:
         Returns:
             DataFrame with calculated features
         """
-        # Calculate features
-        features = self._calculate_moving_averages(data, symbol)
+        # Calculate features using TechnicalIndicators
+        features = self.technical_indicators.calculate_features(
+            data=data,
+            symbol=symbol,
+            features=[
+                self.technical_indicators.FeatureNames.MA_SHORT,
+                self.technical_indicators.FeatureNames.MA_LONG
+            ]
+        )
         
         # Cache the features
         self.cache_features(symbol, start_date, end_date, features)
@@ -195,35 +180,36 @@ class FeatureStore:
         cache_files = self._get_cache_files(symbol)
         print(f"Found cache files: {cache_files}")
         
-        # Find missing date ranges
-        missing_ranges = self._find_missing_date_ranges(symbol, start_dt, end_dt)
-        print(f"Missing date ranges: {missing_ranges}")
-        
-        # If we have missing ranges, return None to trigger recalculation
-        if missing_ranges:
-            return None
-        
-        # Get all relevant cache files
         if not cache_files:
             return None
         
-        # Combine data from all relevant cache files
-        combined_data = []
+        # Collect all cache files that overlap with the requested range
+        overlapping_files = []
         for file in cache_files:
             try:
                 _, file_start, file_end = self._parse_cache_filename(file)
-                print(f"Checking cache file: {file}")
-                print(f"File date range: {file_start} to {file_end}")
-                # Compare dates without time components
+                # If the file overlaps with the requested range, use it
                 if (file_start.date() <= end_dt.date() and file_end.date() >= start_dt.date()):
-                    cached_data = joblib.load(file)
-                    print(f"Loaded data with columns: {cached_data.columns.tolist()}")
-                    # Filter for requested date range
-                    mask = (cached_data.index.date >= start_dt.date()) & (cached_data.index.date <= end_dt.date())
-                    filtered_data = cached_data[mask]
-                    if not filtered_data.empty:
-                        combined_data.append(filtered_data)
-                        print(f"Added data from {file}")
+                    overlapping_files.append((file, file_start, file_end))
+            except Exception as e:
+                print(f"Error parsing cache file {file}: {e}")
+                continue
+        
+        if not overlapping_files:
+            return None
+        
+        # Load and combine all overlapping cache files
+        combined_data = []
+        for file, file_start, file_end in overlapping_files:
+            try:
+                cached_data = joblib.load(file)
+                print(f"Loaded data from {file} with columns: {cached_data.columns.tolist()}")
+                # Filter for requested date range
+                mask = (cached_data.index.date >= start_dt.date()) & (cached_data.index.date <= end_dt.date())
+                filtered_data = cached_data[mask]
+                if not filtered_data.empty:
+                    combined_data.append(filtered_data)
+                    print(f"Added data from {file}")
             except Exception as e:
                 print(f"Error loading cache file {file}: {e}")
                 continue
@@ -238,9 +224,11 @@ class FeatureStore:
         # Remove duplicates (in case of overlapping cache files)
         result = result[~result.index.duplicated(keep='first')]
         
-        # Ensure we have data for the entire requested range
-        if result.index.date.min() > start_dt.date() or result.index.date.max() < end_dt.date():
-            print(f"Data range mismatch: got {result.index.date.min()} to {result.index.date.max()}, need {start_dt.date()} to {end_dt.date()}")
+        # Ensure we have data for the entire requested range (all dates between start_dt and end_dt)
+        all_dates = pd.date_range(start=start_dt, end=end_dt, freq='D')
+        result_dates = pd.to_datetime(result.index.date)
+        if not all(date in result_dates.values for date in all_dates):
+            print(f"Data range mismatch: missing dates in requested range {start_dt.date()} to {end_dt.date()}")
             return None
         
         # Filter for requested features
@@ -248,14 +236,8 @@ class FeatureStore:
             # Check which features are available
             available_features = [f for f in features if f in result.columns]
             if not available_features:
-                print(f"No requested features available. Requested: {features}, Available: {result.columns.tolist()}")
                 return None
-            # Only keep the requested features that are available
             result = result[available_features]
-            # Verify we have all requested features
-            if set(features) != set(available_features):
-                print(f"Missing some requested features. Requested: {features}, Available: {available_features}")
-                return None
         
         return result
     
@@ -272,35 +254,51 @@ class FeatureStore:
             symbol: Stock symbol
             start_date: Start date in YYYY-MM-DD format
             end_date: End date in YYYY-MM-DD format
-            features_df: DataFrame containing the features
+            features_df: DataFrame with features to cache
         """
+        # Don't cache empty DataFrames
         if features_df.empty:
             return
             
-        # Ensure the index is datetime
-        if not isinstance(features_df.index, pd.DatetimeIndex):
-            features_df.index = pd.to_datetime(features_df.index)
-        
-        # Get the actual date range from the data
-        actual_start = features_df.index.min().strftime('%Y-%m-%d')
-        actual_end = features_df.index.max().strftime('%Y-%m-%d')
-        
-        cache_path = self._get_cache_path(symbol, actual_start, actual_end)
-        try:
-            joblib.dump(features_df, cache_path)
-        except Exception as e:
-            print(f"Error caching features: {e}")
+        cache_path = self._get_cache_path(symbol, start_date, end_date)
+        joblib.dump(features_df, cache_path)
+        print(f"Cached features to {cache_path}")
     
     def clear_cache(self, symbol: Optional[str] = None) -> None:
-        """Clear the feature cache.
+        """Clear cached features.
         
         Args:
-            symbol: If provided, only clear cache for this symbol
+            symbol: Stock symbol to clear cache for (if None, clear all)
         """
         if symbol:
-            pattern = f"{symbol}_*_features.joblib"
-            for file in glob.glob(os.path.join(self.cache_dir, pattern)):
-                os.remove(file)
+            pattern = os.path.join(self.cache_dir, f"{symbol}_*_features.joblib")
         else:
-            for file in glob.glob(os.path.join(self.cache_dir, "*_features.joblib")):
-                os.remove(file) 
+            pattern = os.path.join(self.cache_dir, "*_features.joblib")
+            
+        for file in glob.glob(pattern):
+            try:
+                os.remove(file)
+                print(f"Removed cache file: {file}")
+            except Exception as e:
+                print(f"Error removing cache file {file}: {e}")
+
+    def _get_missing_ranges(
+        self,
+        symbol: str,
+        start_date: str,
+        end_date: str
+    ) -> List[Tuple[str, str]]:
+        """Find missing date ranges in cache.
+        
+        Args:
+            symbol: Stock symbol
+            start_date: Start date in YYYY-MM-DD format
+            end_date: End date in YYYY-MM-DD format
+            
+        Returns:
+            List of (start_date, end_date) tuples for missing ranges
+        """
+        start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+        end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+        missing_ranges = self._find_missing_date_ranges(symbol, start_dt, end_dt)
+        return [(d1.strftime('%Y-%m-%d'), d2.strftime('%Y-%m-%d')) for d1, d2 in missing_ranges] 

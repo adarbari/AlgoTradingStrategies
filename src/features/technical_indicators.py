@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict
 import pandas as pd
 import numpy as np
 from ta.trend import SMAIndicator, EMAIndicator, MACD
@@ -9,73 +9,153 @@ from .base import FeatureEngineer
 class TechnicalIndicators(FeatureEngineer):
     """Technical indicators feature engineering implementation."""
     
+    # Feature name constants
+    class FeatureNames:
+        # Trend Indicators
+        SMA_20 = 'sma_20'
+        SMA_50 = 'sma_50'
+        SMA_200 = 'sma_200'
+        EMA_20 = 'ema_20'
+        EMA_50 = 'ema_50'
+        EMA_200 = 'ema_200'
+        MACD = 'macd'
+        MACD_SIGNAL = 'macd_signal'
+        MACD_HIST = 'macd_hist'
+        
+        # Momentum Indicators
+        RSI_14 = 'rsi_14'
+        STOCH_K = 'stoch_k'
+        STOCH_D = 'stoch_d'
+        
+        # Volatility Indicators
+        BB_UPPER = 'bb_upper'
+        BB_MIDDLE = 'bb_middle'
+        BB_LOWER = 'bb_lower'
+        
+        # Volume Indicators
+        VOLUME_MA_5 = 'volume_ma_5'
+        VOLUME_MA_15 = 'volume_ma_15'
+        
+        # Price Action
+        PRICE_CHANGE = 'price_change'
+        VOLUME_CHANGE = 'volume_change'
+        VOLATILITY = 'volatility'
+        PRICE_CHANGE_5MIN = 'price_change_5min'
+        PRICE_CHANGE_15MIN = 'price_change_15min'
+        PRICE_RANGE = 'price_range'
+        PRICE_RANGE_MA = 'price_range_ma'
+        VOLATILITY_5MIN = 'volatility_5min'
+        VOLATILITY_15MIN = 'volatility_15min'
+        
+        # Moving Average Crossover specific
+        MA_SHORT = 'ma_short'
+        MA_LONG = 'ma_long'
+    
     def __init__(self):
         """Initialize the technical indicators feature engineer."""
         self._available_features = [
             # Trend Indicators
-            'sma_20', 'sma_50', 'sma_200',
-            'ema_20', 'ema_50', 'ema_200',
-            'macd', 'macd_signal', 'macd_hist',
+            self.FeatureNames.SMA_20,
+            self.FeatureNames.SMA_50,
+            self.FeatureNames.SMA_200,
+            self.FeatureNames.EMA_20,
+            self.FeatureNames.EMA_50,
+            self.FeatureNames.EMA_200,
+            self.FeatureNames.MACD,
+            self.FeatureNames.MACD_SIGNAL,
+            self.FeatureNames.MACD_HIST,
             
             # Momentum Indicators
-            'rsi_14',
-            'stoch_k', 'stoch_d',
+            self.FeatureNames.RSI_14,
+            self.FeatureNames.STOCH_K,
+            self.FeatureNames.STOCH_D,
             
             # Volatility Indicators
-            'bb_upper', 'bb_middle', 'bb_lower',
+            self.FeatureNames.BB_UPPER,
+            self.FeatureNames.BB_MIDDLE,
+            self.FeatureNames.BB_LOWER,
             
             # Volume Indicators
-            'volume_ma_5', 'volume_ma_15',
+            self.FeatureNames.VOLUME_MA_5,
+            self.FeatureNames.VOLUME_MA_15,
             
             # Price Action
-            'price_change', 'volume_change', 'volatility',
-            'price_change_5min', 'price_change_15min',
-            'price_range', 'price_range_ma',
-            'volatility_5min', 'volatility_15min'
+            self.FeatureNames.PRICE_CHANGE,
+            self.FeatureNames.VOLUME_CHANGE,
+            self.FeatureNames.VOLATILITY,
+            self.FeatureNames.PRICE_CHANGE_5MIN,
+            self.FeatureNames.PRICE_CHANGE_15MIN,
+            self.FeatureNames.PRICE_RANGE,
+            self.FeatureNames.PRICE_RANGE_MA,
+            self.FeatureNames.VOLATILITY_5MIN,
+            self.FeatureNames.VOLATILITY_15MIN,
+            
+            # Moving Average Crossover specific
+            self.FeatureNames.MA_SHORT,
+            self.FeatureNames.MA_LONG
         ]
         
         self._feature_dependencies = {
             # Trend Indicators
-            'sma_20': ['close'],
-            'sma_50': ['close'],
-            'sma_200': ['close'],
-            'ema_20': ['close'],
-            'ema_50': ['close'],
-            'ema_200': ['close'],
-            'macd': ['close'],
-            'macd_signal': ['close'],
-            'macd_hist': ['close'],
+            self.FeatureNames.SMA_20: ['close'],
+            self.FeatureNames.SMA_50: ['close'],
+            self.FeatureNames.SMA_200: ['close'],
+            self.FeatureNames.EMA_20: ['close'],
+            self.FeatureNames.EMA_50: ['close'],
+            self.FeatureNames.EMA_200: ['close'],
+            self.FeatureNames.MACD: ['close'],
+            self.FeatureNames.MACD_SIGNAL: ['close'],
+            self.FeatureNames.MACD_HIST: ['close'],
             
             # Momentum Indicators
-            'rsi_14': ['close'],
-            'stoch_k': ['high', 'low', 'close'],
-            'stoch_d': ['high', 'low', 'close'],
+            self.FeatureNames.RSI_14: ['close'],
+            self.FeatureNames.STOCH_K: ['high', 'low', 'close'],
+            self.FeatureNames.STOCH_D: ['high', 'low', 'close'],
             
             # Volatility Indicators
-            'bb_upper': ['close'],
-            'bb_middle': ['close'],
-            'bb_lower': ['close'],
+            self.FeatureNames.BB_UPPER: ['close'],
+            self.FeatureNames.BB_MIDDLE: ['close'],
+            self.FeatureNames.BB_LOWER: ['close'],
             
             # Volume Indicators
-            'volume_ma_5': ['volume'],
-            'volume_ma_15': ['volume'],
+            self.FeatureNames.VOLUME_MA_5: ['volume'],
+            self.FeatureNames.VOLUME_MA_15: ['volume'],
             
             # Price Action
-            'price_change': ['close'],
-            'volume_change': ['volume'],
-            'volatility': ['close'],
-            'price_change_5min': ['close'],
-            'price_change_15min': ['close'],
-            'price_range': ['high', 'low', 'close'],
-            'price_range_ma': ['high', 'low', 'close'],
-            'volatility_5min': ['close'],
-            'volatility_15min': ['close']
+            self.FeatureNames.PRICE_CHANGE: ['close'],
+            self.FeatureNames.VOLUME_CHANGE: ['volume'],
+            self.FeatureNames.VOLATILITY: ['close'],
+            self.FeatureNames.PRICE_CHANGE_5MIN: ['close'],
+            self.FeatureNames.PRICE_CHANGE_15MIN: ['close'],
+            self.FeatureNames.PRICE_RANGE: ['high', 'low', 'close'],
+            self.FeatureNames.PRICE_RANGE_MA: ['high', 'low', 'close'],
+            self.FeatureNames.VOLATILITY_5MIN: ['close'],
+            self.FeatureNames.VOLATILITY_15MIN: ['close'],
+            
+            # Moving Average Crossover specific
+            self.FeatureNames.MA_SHORT: ['close'],
+            self.FeatureNames.MA_LONG: ['close']
         }
+        
+        # Default MA windows
+        self._short_window = 10
+        self._long_window = 50
+    
+    def set_ma_windows(self, short_window: int, long_window: int) -> None:
+        """Set the moving average windows.
+        
+        Args:
+            short_window: Short-term MA window
+            long_window: Long-term MA window
+        """
+        self._short_window = short_window
+        self._long_window = long_window
     
     def calculate_features(
         self,
         data: pd.DataFrame,
-        features: Optional[List[str]] = None
+        features: Optional[List[str]] = None,
+        symbol: Optional[str] = None
     ) -> pd.DataFrame:
         """Calculate technical indicators for the given data."""
         if features is None:
@@ -94,71 +174,79 @@ class TechnicalIndicators(FeatureEngineer):
             raise ValueError(f"Missing required columns: {missing_columns}")
         
         # Calculate trend indicators
-        if any(f in features for f in ['sma_20', 'sma_50', 'sma_200']):
+        if any(f in features for f in [self.FeatureNames.SMA_20, self.FeatureNames.SMA_50, self.FeatureNames.SMA_200]):
             for period in [20, 50, 200]:
-                if f'sma_{period}' in features:
-                    df[f'sma_{period}'] = SMAIndicator(close=df['close'], window=period).sma_indicator()
+                feature_name = f'sma_{period}'
+                if feature_name in features:
+                    df[feature_name] = SMAIndicator(close=df['close'], window=period).sma_indicator()
         
-        if any(f in features for f in ['ema_20', 'ema_50', 'ema_200']):
+        if any(f in features for f in [self.FeatureNames.EMA_20, self.FeatureNames.EMA_50, self.FeatureNames.EMA_200]):
             for period in [20, 50, 200]:
-                if f'ema_{period}' in features:
-                    df[f'ema_{period}'] = EMAIndicator(close=df['close'], window=period).ema_indicator()
+                feature_name = f'ema_{period}'
+                if feature_name in features:
+                    df[feature_name] = EMAIndicator(close=df['close'], window=period).ema_indicator()
         
-        if any(f in features for f in ['macd', 'macd_signal', 'macd_hist']):
+        if any(f in features for f in [self.FeatureNames.MACD, self.FeatureNames.MACD_SIGNAL, self.FeatureNames.MACD_HIST]):
             macd = MACD(close=df['close'])
-            if 'macd' in features:
-                df['macd'] = macd.macd()
-            if 'macd_signal' in features:
-                df['macd_signal'] = macd.macd_signal()
-            if 'macd_hist' in features:
-                df['macd_hist'] = macd.macd_diff()
+            if self.FeatureNames.MACD in features:
+                df[self.FeatureNames.MACD] = macd.macd()
+            if self.FeatureNames.MACD_SIGNAL in features:
+                df[self.FeatureNames.MACD_SIGNAL] = macd.macd_signal()
+            if self.FeatureNames.MACD_HIST in features:
+                df[self.FeatureNames.MACD_HIST] = macd.macd_diff()
         
         # Calculate momentum indicators
-        if 'rsi_14' in features:
-            df['rsi_14'] = RSIIndicator(close=df['close']).rsi()
+        if self.FeatureNames.RSI_14 in features:
+            df[self.FeatureNames.RSI_14] = RSIIndicator(close=df['close']).rsi()
         
-        if any(f in features for f in ['stoch_k', 'stoch_d']):
+        if any(f in features for f in [self.FeatureNames.STOCH_K, self.FeatureNames.STOCH_D]):
             stoch = StochasticOscillator(high=df['high'], low=df['low'], close=df['close'])
-            if 'stoch_k' in features:
-                df['stoch_k'] = stoch.stoch()
-            if 'stoch_d' in features:
-                df['stoch_d'] = stoch.stoch_signal()
+            if self.FeatureNames.STOCH_K in features:
+                df[self.FeatureNames.STOCH_K] = stoch.stoch()
+            if self.FeatureNames.STOCH_D in features:
+                df[self.FeatureNames.STOCH_D] = stoch.stoch_signal()
         
         # Calculate volatility indicators
-        if any(f in features for f in ['bb_upper', 'bb_middle', 'bb_lower']):
+        if any(f in features for f in [self.FeatureNames.BB_UPPER, self.FeatureNames.BB_MIDDLE, self.FeatureNames.BB_LOWER]):
             bb = BollingerBands(close=df['close'])
-            if 'bb_upper' in features:
-                df['bb_upper'] = bb.bollinger_hband()
-            if 'bb_middle' in features:
-                df['bb_middle'] = bb.bollinger_mavg()
-            if 'bb_lower' in features:
-                df['bb_lower'] = bb.bollinger_lband()
+            if self.FeatureNames.BB_UPPER in features:
+                df[self.FeatureNames.BB_UPPER] = bb.bollinger_hband()
+            if self.FeatureNames.BB_MIDDLE in features:
+                df[self.FeatureNames.BB_MIDDLE] = bb.bollinger_mavg()
+            if self.FeatureNames.BB_LOWER in features:
+                df[self.FeatureNames.BB_LOWER] = bb.bollinger_lband()
         
         # Calculate volume indicators
-        if 'volume_ma_5' in features:
-            df['volume_ma_5'] = df['volume'].rolling(window=5).mean()
-        if 'volume_ma_15' in features:
-            df['volume_ma_15'] = df['volume'].rolling(window=15).mean()
+        if self.FeatureNames.VOLUME_MA_5 in features:
+            df[self.FeatureNames.VOLUME_MA_5] = df['volume'].rolling(window=5).mean()
+        if self.FeatureNames.VOLUME_MA_15 in features:
+            df[self.FeatureNames.VOLUME_MA_15] = df['volume'].rolling(window=15).mean()
         
         # Calculate price action indicators
-        if 'price_change' in features:
-            df['price_change'] = df['close'].pct_change()
-        if 'volume_change' in features:
-            df['volume_change'] = df['volume'].pct_change()
-        if 'volatility' in features:
-            df['volatility'] = df['price_change'].rolling(window=20).std()
-        if 'price_change_5min' in features:
-            df['price_change_5min'] = df['close'].pct_change(5)
-        if 'price_change_15min' in features:
-            df['price_change_15min'] = df['close'].pct_change(15)
-        if 'price_range' in features:
-            df['price_range'] = (df['high'] - df['low']) / df['close']
-        if 'price_range_ma' in features:
-            df['price_range_ma'] = df['price_range'].rolling(window=10).mean()
-        if 'volatility_5min' in features:
-            df['volatility_5min'] = df['price_change'].rolling(window=5).std()
-        if 'volatility_15min' in features:
-            df['volatility_15min'] = df['price_change'].rolling(window=15).std()
+        if self.FeatureNames.PRICE_CHANGE in features:
+            df[self.FeatureNames.PRICE_CHANGE] = df['close'].pct_change()
+        if self.FeatureNames.VOLUME_CHANGE in features:
+            df[self.FeatureNames.VOLUME_CHANGE] = df['volume'].pct_change()
+        if self.FeatureNames.VOLATILITY in features:
+            df[self.FeatureNames.VOLATILITY] = df[self.FeatureNames.PRICE_CHANGE].rolling(window=20).std()
+        if self.FeatureNames.PRICE_CHANGE_5MIN in features:
+            df[self.FeatureNames.PRICE_CHANGE_5MIN] = df['close'].pct_change(5)
+        if self.FeatureNames.PRICE_CHANGE_15MIN in features:
+            df[self.FeatureNames.PRICE_CHANGE_15MIN] = df['close'].pct_change(15)
+        if self.FeatureNames.PRICE_RANGE in features:
+            df[self.FeatureNames.PRICE_RANGE] = (df['high'] - df['low']) / df['close']
+        if self.FeatureNames.PRICE_RANGE_MA in features:
+            df[self.FeatureNames.PRICE_RANGE_MA] = df[self.FeatureNames.PRICE_RANGE].rolling(window=10).mean()
+        if self.FeatureNames.VOLATILITY_5MIN in features:
+            df[self.FeatureNames.VOLATILITY_5MIN] = df[self.FeatureNames.PRICE_CHANGE].rolling(window=5).std()
+        if self.FeatureNames.VOLATILITY_15MIN in features:
+            df[self.FeatureNames.VOLATILITY_15MIN] = df[self.FeatureNames.PRICE_CHANGE].rolling(window=15).std()
+        
+        # Calculate MA crossover specific features
+        if self.FeatureNames.MA_SHORT in features:
+            df[self.FeatureNames.MA_SHORT] = df['close'].rolling(window=self._short_window).mean()
+        if self.FeatureNames.MA_LONG in features:
+            df[self.FeatureNames.MA_LONG] = df['close'].rolling(window=self._long_window).mean()
         
         return df
     

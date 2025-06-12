@@ -17,6 +17,7 @@ from src.visualization.portfolio_visualizer import (
     plot_backtest_results
 )
 import pandas as pd
+from src.data.base import DataCache
 
 def main():
     parser = argparse.ArgumentParser(description='Run trading strategy')
@@ -32,8 +33,10 @@ def main():
     logger = trading_logger.logger
 
     try:
-        # Initialize data provider
-        data_provider = PolygonProvider()
+        # Initialize data cache
+        data_cache = DataCache()
+        # Initialize data provider with cache
+        data_provider = PolygonProvider(cache=data_cache)
 
         # Fetch historical data
         logger.info(f"Fetching historical data for {args.symbol}")
@@ -72,14 +75,14 @@ def main():
         signals = pd.DataFrame(signals_list)
 
         # Include original price data in signals DataFrame
-        signals['price'] = prepared_data['price']
+        signals['close'] = prepared_data['close']
 
         if signals.empty:
             logger.error("No signals generated")
             return
 
         # Calculate returns
-        signals['returns'] = signals['price'].pct_change().fillna(0)
+        signals['returns'] = signals['close'].pct_change().fillna(0)
         signals['strategy_returns'] = signals['returns'] * (signals['action'] == 'BUY').astype(int)
         cumulative_returns = (1 + signals['strategy_returns']).cumprod()
         
@@ -91,7 +94,7 @@ def main():
         for index, row in signals.iterrows():
             # Log period information
             period_data = {
-                'price': row['price'],
+                'close': row['close'],
                 'ma_short': row['features']['ma_short'],
                 'ma_long': row['features']['ma_long'],
                 'action': row['action'],
@@ -104,7 +107,7 @@ def main():
             if row['action'] in ['BUY', 'SELL']:
                 trade_type = row['action']
                 shares = 100  # Fixed trade size
-                price = row['price']
+                price = row['close']
                 
                 # Calculate profit for sell trades
                 profit = None

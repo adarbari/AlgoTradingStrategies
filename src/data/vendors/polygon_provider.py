@@ -5,12 +5,16 @@ from datetime import datetime
 import time
 from polygon import RESTClient
 from ..base import DataProvider, DataCache
+import numpy as np
 
 class PolygonProvider(DataProvider):
     """Polygon.io data provider implementation."""
     def __init__(self, api_key: str = None, cache: Optional[DataCache] = None):
-        # Always use the working API key
-        api_key = "rD9rEIzrzJOcVlPq1ttiAyRLyZyquFiF"
+        # Try to get API key from environment variable first
+        api_key = api_key or os.getenv('POLYGON_API_KEY')
+        # Fall back to hardcoded key if not set
+        if not api_key:
+            api_key = "rD9rEIzrzJOcVlPq1ttiAyRLyZyquFiF"
         self.client = RESTClient(api_key)
         super().__init__(cache=cache)
         self._cache_dir = 'data_cache'
@@ -54,8 +58,22 @@ class PolygonProvider(DataProvider):
                     'volume': agg.volume
                 } for agg in aggs])
                 
+                print(f"Raw data shape: {df.shape}")
+                print(f"Raw data columns: {df.columns.tolist()}")
+                print(f"Raw data sample:\n{df.head()}")
+                
                 df.set_index('Date', inplace=True)
                 df = df[(df.index >= start_date) & (df.index <= end_date)]
+                
+                print(f"After filtering shape: {df.shape}")
+                print(f"After filtering sample:\n{df.head()}")
+                
+                # Ensure all required columns are present
+                required_columns = ['open', 'high', 'low', 'close', 'volume']
+                for col in required_columns:
+                    if col not in df.columns:
+                        df[col] = np.nan
+                
                 return df
                 
             except Exception as e:
@@ -84,7 +102,7 @@ class PolygonProvider(DataProvider):
             end_date = pd.to_datetime(end_date)
             
         # Try to get from cache first
-        if self.cache:
+        if self.cache is not None:
             cached_data = self.cache.get_cached_data(
                 symbol=symbol,
                 start_date=start_date.strftime('%Y-%m-%d'),
@@ -97,7 +115,7 @@ class PolygonProvider(DataProvider):
         df = self._make_api_request(symbol, start_date, end_date)
         
         # Cache the data if we got any
-        if not df.empty and self.cache:
+        if not df.empty and self.cache is not None:
             self.cache.cache_data(
                 symbol=symbol,
                 start_date=start_date.strftime('%Y-%m-%d'),
