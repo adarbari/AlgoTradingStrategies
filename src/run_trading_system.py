@@ -202,6 +202,13 @@ class TradingSystem:
                 f"(Return: {((portfolio_value - self.initial_budget) / self.initial_budget) * 100:.2f}%)"
             )
             
+            # Generate visualizations for each symbol
+            for symbol in self.symbols:
+                trades_df = pd.read_csv(self.logger.phase_files[split_name]['trades'])
+                self.logger.plot_portfolio_performance(symbol, trades_df)
+                self.logger.plot_trade_distribution(symbol, trades_df)
+                self.logger.generate_performance_report(symbol, trades_df)
+            
     def get_results(self) -> Dict:
         """Get trading results for the current phase.
         

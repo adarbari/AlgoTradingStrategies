@@ -8,7 +8,11 @@ from typing import Dict, Optional
 import json
 import numpy as np
 
+logger = logging.getLogger(__name__)
+
 class TradingLogger:
+    """Manages logging for the trading system."""
+    
     def __init__(self):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.run_timestamp_dir = os.path.join(os.getcwd(), "logs", f"run_{timestamp}")
@@ -25,6 +29,8 @@ class TradingLogger:
             os.makedirs(phase_dir, exist_ok=True)
             os.makedirs(os.path.join(phase_dir, "logs"), exist_ok=True)
             os.makedirs(os.path.join(phase_dir, "visualizations"), exist_ok=True)
+            # Create ticker-specific subdirectory
+            os.makedirs(os.path.join(phase_dir, "ticker"), exist_ok=True)
         
         # Initialize log files for each phase
         self.phase_files = {}
@@ -48,11 +54,12 @@ class TradingLogger:
         """Setup logging directory and configuration"""
         # Setup logging configuration for each phase
         for phase, phase_dir in self.phase_dirs.items():
+            log_file = os.path.join(phase_dir, "logs", "trading.log")
             logging.basicConfig(
                 level=logging.INFO,
                 format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                 handlers=[
-                    logging.FileHandler(os.path.join(phase_dir, "logs", "trading.log")),
+                    logging.FileHandler(log_file),
                     logging.StreamHandler()
                 ]
             )
@@ -93,6 +100,12 @@ class TradingLogger:
         # Append to trades CSV for current phase
         pd.DataFrame([trade_data]).to_csv(self.phase_files[self.current_phase]['trades'], mode='a', header=False, index=False)
         
+        # Append to ticker-specific trades CSV
+        ticker_trades_file = os.path.join(self.phase_dirs[self.current_phase], "ticker", f"{symbol}_trades.csv")
+        if not os.path.exists(ticker_trades_file):
+            pd.DataFrame(columns=['symbol', 'trade_type', 'price', 'shares', 'timestamp', 'profit', 'portfolio_value']).to_csv(ticker_trades_file, index=False)
+        pd.DataFrame([trade_data]).to_csv(ticker_trades_file, mode='a', header=False, index=False)
+        
     def log_period(self, symbol: str, timestamp: datetime, data: Dict):
         """Log period information (e.g., OHLCV, indicators, signals)"""
         # Convert timestamp to string if it's a pandas Timestamp or datetime
@@ -123,6 +136,12 @@ class TradingLogger:
         # Append to periods CSV for current phase
         pd.DataFrame([period_data]).to_csv(self.phase_files[self.current_phase]['periods'], mode='a', header=False, index=False)
         
+        # Append to ticker-specific periods CSV
+        ticker_periods_file = os.path.join(self.phase_dirs[self.current_phase], "ticker", f"{symbol}_periods.csv")
+        if not os.path.exists(ticker_periods_file):
+            pd.DataFrame(columns=['symbol', 'timestamp', 'open', 'high', 'low', 'close', 'volume', 'signal', 'returns', 'strategy_returns']).to_csv(ticker_periods_file, index=False)
+        pd.DataFrame([period_data]).to_csv(ticker_periods_file, mode='a', header=False, index=False)
+        
     def plot_portfolio_performance(self, symbol: str, trades: pd.DataFrame):
         """Plot portfolio performance using trade data"""
         plt.figure(figsize=(12, 6))
@@ -134,7 +153,7 @@ class TradingLogger:
         plt.grid(True)
         plt.tight_layout()
         
-        # Save plot in phase-specific directory
+        # Save plot in phase-specific visualizations directory
         plt.savefig(os.path.join(self.phase_dirs[self.current_phase], "visualizations", f"{symbol}_portfolio_performance.png"))
         plt.close()
         
@@ -149,7 +168,7 @@ class TradingLogger:
         plt.grid(True)
         plt.tight_layout()
         
-        # Save plot in phase-specific directory
+        # Save plot in phase-specific visualizations directory
         plt.savefig(os.path.join(self.phase_dirs[self.current_phase], "visualizations", f"{symbol}_trade_distribution.png"))
         plt.close()
         
@@ -157,6 +176,25 @@ class TradingLogger:
         """Generate performance report using trade data"""
         profit_col = 'profit'
         pv_col = 'portfolio_value'
+        
+        if trades.empty:
+            logger.warning(f"No trades were executed for {symbol} in the {self.current_phase} phase.")
+            return {
+                "symbol": symbol,
+                "phase": self.current_phase,
+                "total_trades": 0,
+                "winning_trades": 0,
+                "losing_trades": 0,
+                "win_rate": 0,
+                "total_profit": 0,
+                "average_profit": 0,
+                "max_profit": 0,
+                "min_profit": 0,
+                "final_portfolio_value": 0,
+                "initial_portfolio_value": 0,
+                "portfolio_return": 0,
+                "generated_at": datetime.now().isoformat()
+            }
         
         report = {
             "symbol": symbol,
@@ -180,4 +218,11 @@ class TradingLogger:
         with open(report_file, 'w') as f:
             json.dump(report, f, indent=4)
         
-        return report 
+        return report
+
+    def publish_returns(self, returns_data: Dict[str, float]):
+        """Publish returns for each stage in a file named 'returns.csv' in the run_<timestamp> folder."""
+        returns_file = os.path.join(self.run_timestamp_dir, "returns.csv")
+        df = pd.DataFrame([returns_data])
+        df.to_csv(returns_file, index=False, mode='a', header=not os.path.exists(returns_file))
+        self.logger.info(f"Returns published to {returns_file}") 
