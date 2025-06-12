@@ -15,7 +15,6 @@ import pandas as pd
 from src.data.vendors.polygon_provider import PolygonProvider
 from src.data.base import DataCache
 from src.features.feature_store import FeatureStore
-from src.strategies.strategy_factory import StrategyFactory
 from src.execution.portfolio_manager import PortfolioManager
 from src.execution.trade_executor import TradeExecutor
 from src.helpers.logger import TradingLogger
@@ -53,7 +52,6 @@ class TradingSystem:
         self.initial_budget = initial_budget
         
         # Initialize components that are phase-independent
-        self.strategy_factory = StrategyFactory()
         self.logger = trading_logger  # Use the global trading logger
         # Initialize data cache and pass it to PolygonProvider
         self.data_cache = DataCache()
@@ -171,25 +169,19 @@ class TradingSystem:
         
         # Initialize phase-specific components
         self.portfolio_manager = PortfolioManager(self.initial_budget)
+        self.trade_executor = TradeExecutor(
+            portfolio_manager=self.portfolio_manager,
+            symbols=self.symbols,
+            trading_logger=self.logger
+        )
         
-        # Get ticker-specific strategies for each symbol
-        strategies = []
-        for symbol in self.symbols:
-            # Get both MA and ML strategies for each symbol
-            ma_strategy = self.strategy_factory.get_strategy(symbol, 'ma')
-            ml_strategy = self.strategy_factory.get_strategy(symbol, 'ml')
-            
-            # Prepare data for training if in training phase
-            if split_name == 'train':
-                symbol_data = self.get_data_for_split(split_name)[symbol]
-                ma_strategy.train_model(symbol_data, symbol)
-                ml_strategy.train_model(symbol_data, symbol)
-            
-            strategies.extend([ma_strategy, ml_strategy])
-            
-        self.trade_executor = TradeExecutor(self.portfolio_manager, strategies, trading_logger=self.logger)
-        
+        # Get split data
         split_data = self.get_data_for_split(split_name)
+        
+        # Train strategies if in training phase
+        if split_name == 'train':
+            self.trade_executor.train_strategies(split_data)
+        
         # Get all unique timestamps in the split
         all_timestamps = set()
         for data in split_data.values():

@@ -7,6 +7,7 @@ from src.helpers.logger import TradingLogger
 import logging
 from collections import defaultdict
 from src.strategies.strategy_factory import StrategyFactory
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -25,14 +26,43 @@ class TradeExecutor:
     """
     Orchestrates strategy signal generation, aggregates signals, decides trades, and executes them via PortfolioManager.
     """
-    def __init__(self, portfolio_manager: PortfolioManager, strategies: List[BaseStrategy], trading_logger: Optional[TradingLogger] = None):
+    def __init__(
+        self, 
+        portfolio_manager: PortfolioManager, 
+        symbols: List[str],
+        trading_logger: Optional[TradingLogger] = None
+    ):
         self.portfolio_manager = portfolio_manager
+        self.symbols = symbols
         self.strategy_factory = StrategyFactory()
+        self.strategies: Dict[str, List[BaseStrategy]] = {}  # symbol -> list of strategies
         self.current_prices: Dict[str, float] = {}
         self.current_features: Dict[str, Dict[str, float]] = {}  # symbol -> features
         self.trading_logger = trading_logger if trading_logger is not None else TradingLogger()
         self.max_position_value = 2000
-        logger.info("TradeExecutor initialized with %d strategies", len(strategies))
+        self._initialize_strategies()
+        logger.info("TradeExecutor initialized with %d symbols", len(symbols))
+
+    def _initialize_strategies(self):
+        """Initialize strategies for each symbol."""
+        for symbol in self.symbols:
+            # Get both MA and ML strategies for each symbol
+            ma_strategy = self.strategy_factory.get_strategy(symbol, 'ma')
+            ml_strategy = self.strategy_factory.get_strategy(symbol, 'ml')
+            self.strategies[symbol] = [ma_strategy, ml_strategy]
+        logger.info("Initialized strategies for %d symbols", len(self.symbols))
+
+    def train_strategies(self, training_data: Dict[str, pd.DataFrame]):
+        """Train all strategies with the provided training data."""
+        for symbol, data in training_data.items():
+            if symbol in self.strategies:
+                for strategy in self.strategies[symbol]:
+                    try:
+                        strategy.train_model(data, symbol)
+                        logger.info("Trained strategy %s for symbol %s", strategy.name, symbol)
+                    except Exception as e:
+                        logger.error("Error training strategy %s for symbol %s: %s", 
+                                   strategy.name, symbol, str(e))
 
     def update_prices(self, prices: Dict[str, float]):
         """Update current market prices"""
@@ -53,11 +83,11 @@ class TradeExecutor:
         all_signals: List[StrategySignal] = []
         
         for symbol, features in self.current_features.items():
-             # Get both MA and ML strategies for each symbol
-            ma_strategy = self.strategy_factory.get_strategy(symbol, 'ma')
-            ml_strategy = self.strategy_factory.get_strategy(symbol, 'ml')
-            
-            for strategy in [ma_strategy, ml_strategy]:
+            if symbol not in self.strategies:
+                logger.warning("No strategies found for symbol %s", symbol)
+                continue
+                
+            for strategy in self.strategies[symbol]:
                 try:
                     if symbol not in self.current_prices:
                         logger.error("Symbol %s not found in current prices", symbol)
@@ -67,8 +97,10 @@ class TradeExecutor:
                     logger.info("Strategy %s generated signal for %s: %s", strategy.name, symbol, signal)
                     all_signals.append(signal)
                 except Exception as e:
-                    logger.error("Error generating signals for strategy %s, symbol %s: %s", strategy.name, symbol, str(e))
+                    logger.error("Error generating signals for strategy %s, symbol %s: %s", 
+                               strategy.name, symbol, str(e))
                     continue
+
         if not all_signals:
             logger.info("No signals generated for timestamp %s", timestamp)
             return []
@@ -160,8 +192,6 @@ class TradeExecutor:
         
     def _calculate_position_size(self, symbol: str, price: float, confidence: float) -> float:
         """Calculate position size based on portfolio value and confidence"""
-            
-        
         # Calculate base quantity
         position_value = self.max_position_value * confidence
         quantity = position_value / price
