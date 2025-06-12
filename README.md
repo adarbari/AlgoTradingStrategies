@@ -17,7 +17,7 @@ A modular algorithmic trading system that supports multiple strategies and real-
 src/
 ├── execution/
 │   ├── portfolio_manager.py  # Manages portfolio state and positions
-│   └── trade_decider.py      # Makes trade decisions based on signals
+│   └── trade_executor.py      # Makes trade decisions based on signals
 ├── strategies/
 │   ├── base_strategy.py      # Base class for all strategies
 │   └── ma_crossover_strategy.py  # Example MA Crossover strategy
@@ -123,7 +123,8 @@ pip install -r requirements.txt
 
 Simply run the backtest script:
 ```bash
-python backtest.py
+PYTHONPATH=. python src/scripts/backtest.py --strategy ma_crossover OR 
+PYTHONPATH=. python src/scripts/backtest.py --strategy random_forest
 ```
 
 The script will:
@@ -152,7 +153,7 @@ You can modify the following parameters in the code:
 To run the strategy and generate results, use the following command:
 
 ```bash
-PYTHONPATH=. python3 src/scripts/run_strategy.py --symbol AAPL --strategy ml --start-date 2025-01-01 --end-date 2025-04-10
+PYTHONPATH=. python3 src/run_trading_system.py --symbol AAPL --strategy ml --start-date 2025-01-01 --end-date 2025-04-10
 ```
 
 This script will execute the strategy and save the results in the `results` directory.
@@ -162,4 +163,5 @@ This script will execute the strategy and save the results in the `results` dire
 This project contains algorithmic trading models and strategies.
 
 ## Recent Update
-- Updated workflow to use Python 3.9, 3.10, and 3.11 for CI/CD. 
+- Updated workflow to use Python 3.9, 3.10, and 3.11 for CI/CD.
+- The driver file is now `run_trading_system.py`. 

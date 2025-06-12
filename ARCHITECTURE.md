@@ -100,7 +100,7 @@ src/
 ├── strategies/         # Trading strategies
 │   ├── base_strategy.py
 │   └── SingleStock/    # Single stock strategies
-└── run_trading_system.py
+└── run_trading_system.py  # Main driver file
 ```
 
 ## Strategy Interface
@@ -116,3 +116,6 @@ Feature store must:
 2. Provide consistent feature calculation
 3. Support feature versioning
 4. Handle data preprocessing 
+
+## Recent Update
+- The driver file is now `run_trading_system.py`. 
