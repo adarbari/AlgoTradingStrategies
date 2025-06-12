@@ -49,7 +49,7 @@ class RandomForestStrategy(BaseStrategy):
         self.scaler = StandardScaler()
         self.feature_columns = None
         
-    def prepare_data(self, data: pd.DataFrame, symbol: str) -> pd.DataFrame:
+    def train_model(self, data: pd.DataFrame, symbol: str):
         """
         Prepare data for the strategy by calculating features.
         
@@ -59,6 +59,38 @@ class RandomForestStrategy(BaseStrategy):
             
         Returns:
             pd.DataFrame: Data with features
+        """
+        if self.model is None:
+            features = self._get_training_features(data, symbol)
+            
+            # Store feature columns for prediction (excluding target and close)
+            self.feature_columns = [col for col in features.columns if col not in ['target', 'close']]
+            
+            # Select features for training
+            X = features[self.feature_columns]
+            y = features['target']
+        
+            # Create and train model
+            self.model = RandomForestClassifier(
+                n_estimators=self.n_estimators,
+                max_depth=self.max_depth,
+                min_samples_split=self.min_samples_split,
+                random_state=42)
+        
+            # Fit scaler and transform features
+            X_scaled = self.scaler.fit_transform(X)
+            self.model.fit(X_scaled, y)
+    
+    def _get_training_features(self, data: pd.DataFrame, symbol: str) -> pd.DataFrame:
+        """
+        Get training features for the strategy.
+        
+        Args:
+            data (pd.DataFrame): Price data
+            symbol (str): Stock symbol
+            
+        Returns:
+            pd.DataFrame: Training features
         """
         # Determine date range
         start_date = data.index.min().strftime('%Y-%m-%d')
@@ -72,39 +104,8 @@ class RandomForestStrategy(BaseStrategy):
             end_date=end_date
         )
         
-        # Store feature columns for prediction (excluding target)
-        self.feature_columns = [col for col in features.columns if col not in ['target', 'close']]
-        
-        # Train model and fit scaler if not already done
-        if self.model is None:
-            self._train_model(features)
-            features[self.feature_columns] = self.scaler.fit_transform(features[self.feature_columns])
-        else:
-            features[self.feature_columns] = self.scaler.transform(features[self.feature_columns])
-        
         return features
-    
-    def _train_model(self, data: pd.DataFrame) -> None:
-        """
-        Train the Random Forest model.
-        
-        Args:
-            data (pd.DataFrame): Training data with features and target
-        """
-        # Select features for training (excluding target)
-        feature_cols = [col for col in data.columns if col not in ['target', 'close']]
-        X = data[feature_cols]
-        y = data['target']
-        
-        # Create and train model
-        self.model = RandomForestClassifier(
-            n_estimators=self.n_estimators,
-            max_depth=self.max_depth,
-            min_samples_split=self.min_samples_split,
-            random_state=42
-        )
-        self.model.fit(X, y)
-    
+
     def generate_signals(
         self,
         features: Dict[str, float],
@@ -122,7 +123,7 @@ class RandomForestStrategy(BaseStrategy):
         Returns:
             StrategySignal: Trading signal with probabilities and confidence
         """
-        if not self.model:
+        if not self.model or not self.feature_columns:
             # Return HOLD signal with low confidence if model is not trained
             return StrategySignal(
                 symbol=symbol,
@@ -135,9 +136,13 @@ class RandomForestStrategy(BaseStrategy):
         
         # Create DataFrame with features to preserve feature names
         feature_df = pd.DataFrame([features])
-        # Remove target if present in features
-        if 'target' in feature_df.columns:
-            feature_df = feature_df.drop('target', axis=1)
+        
+        # Ensure we have all required features
+        missing_features = set(self.feature_columns) - set(feature_df.columns)
+        if missing_features:
+            raise ValueError(f"Missing required features: {missing_features}")
+            
+        # Select only the features used during training
         feature_values = feature_df[self.feature_columns]
         
         # Scale features

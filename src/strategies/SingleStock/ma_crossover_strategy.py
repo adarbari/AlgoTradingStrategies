@@ -41,34 +41,8 @@ class MACrossoverStrategy(BaseStrategy):
         self._prev_features = None  # Store previous features for crossover detection
         self.technical_indicators = TechnicalIndicators()
         
-    def prepare_data(self, data: pd.DataFrame, symbol: str) -> pd.DataFrame:
-        """
-        Prepare data for the strategy by using cached moving averages or calculating them.
-        
-        Args:
-            data (pd.DataFrame): Price data
-            symbol (str): Stock symbol
-            
-        Returns:
-            pd.DataFrame: Data with moving averages
-        """
-        # Determine date range
-        start_date = data.index.min().strftime('%Y-%m-%d')
-        end_date = data.index.max().strftime('%Y-%m-%d')
-        
-        print(f"Looking for features in cache: {symbol} from {start_date} to {end_date}")
-        print(f"Cache directory: {self.cache_dir}")
-        
-        # Get features using the feature store
-        features = self.feature_store.get_features(
-            symbol=symbol,
-            data=data,
-            start_date=start_date,
-            end_date=end_date
-        )
-        
-        print(f"Found features with columns: {features.columns.tolist()}")
-        return features
+    def train_model(self, data: pd.DataFrame, symbol: str):
+        return None
     
     def generate_signals(
         self,

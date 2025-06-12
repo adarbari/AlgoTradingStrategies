@@ -89,25 +89,43 @@ def test_rf_strategy_initialization(rf_strategy):
 
 def test_ma_strategy_prepare_data(ma_strategy, sample_data):
     """Test MACrossoverStrategy data preparation."""
-    prepared_data = ma_strategy.prepare_data(sample_data, 'AAPL')
-    assert isinstance(prepared_data, pd.DataFrame)
-    assert len(prepared_data) > 0
+    ma_strategy.train_model(sample_data, 'AAPL')
+    features = ma_strategy.feature_store.get_features(
+        symbol='AAPL',
+        data=sample_data,
+        start_date=sample_data.index.min().strftime('%Y-%m-%d'),
+        end_date=sample_data.index.max().strftime('%Y-%m-%d')
+    )
+    assert isinstance(features, pd.DataFrame)
+    assert len(features) > 0
     technical_indicators = TechnicalIndicators()
-    assert technical_indicators.FeatureNames.MA_SHORT in prepared_data.columns
-    assert technical_indicators.FeatureNames.MA_LONG in prepared_data.columns
+    assert technical_indicators.FeatureNames.MA_SHORT in features.columns
+    assert technical_indicators.FeatureNames.MA_LONG in features.columns
 
 def test_rf_strategy_prepare_data(rf_strategy, sample_data):
     """Test RandomForestStrategy data preparation."""
-    prepared_data = rf_strategy.prepare_data(sample_data, 'AAPL')
-    assert isinstance(prepared_data, pd.DataFrame)
-    assert len(prepared_data) > 0
-    assert 'target' in prepared_data.columns
+    rf_strategy.train_model(sample_data, 'AAPL')
+    features = rf_strategy.feature_store.get_features(
+        symbol='AAPL',
+        data=sample_data,
+        start_date=sample_data.index.min().strftime('%Y-%m-%d'),
+        end_date=sample_data.index.max().strftime('%Y-%m-%d')
+    )
+    assert isinstance(features, pd.DataFrame)
+    assert len(features) > 0
+    assert 'target' in features.columns
     assert rf_strategy.model is not None
 
 def test_ma_strategy_generate_signals(ma_strategy, sample_data):
     """Test MACrossoverStrategy signal generation."""
-    prepared_data = ma_strategy.prepare_data(sample_data, 'AAPL')
-    signals = ma_strategy.generate_signals(prepared_data, 'AAPL', datetime.now())
+    ma_strategy.train_model(sample_data, 'AAPL')
+    features = ma_strategy.feature_store.get_features(
+        symbol='AAPL',
+        data=sample_data,
+        start_date=sample_data.index.min().strftime('%Y-%m-%d'),
+        end_date=sample_data.index.max().strftime('%Y-%m-%d')
+    )
+    signals = ma_strategy.generate_signals(features.iloc[-1].to_dict(), 'AAPL', datetime.now())
     assert isinstance(signals, StrategySignal)
     assert hasattr(signals, 'timestamp')
     assert hasattr(signals, 'symbol')
@@ -122,9 +140,15 @@ def test_ma_strategy_generate_signals(ma_strategy, sample_data):
 
 def test_rf_strategy_generate_signals(rf_strategy, sample_data):
     """Test RandomForestStrategy signal generation."""
-    prepared_data = rf_strategy.prepare_data(sample_data, 'AAPL')
-    # Pass only the last row as a dict
-    last_row = prepared_data.iloc[-1][rf_strategy.feature_columns].to_dict()
+    rf_strategy.train_model(sample_data, 'AAPL')
+    features = rf_strategy.feature_store.get_features(
+        symbol='AAPL',
+        data=sample_data,
+        start_date=sample_data.index.min().strftime('%Y-%m-%d'),
+        end_date=sample_data.index.max().strftime('%Y-%m-%d')
+    )
+    # Pass only the last row as a dict, excluding 'close' and 'target'
+    last_row = features.iloc[-1].drop(['close', 'target']).to_dict()
     signals = rf_strategy.generate_signals(last_row, 'AAPL', datetime.now())
     assert isinstance(signals, StrategySignal)
     assert hasattr(signals, 'timestamp')
@@ -138,7 +162,7 @@ def test_rf_strategy_generate_signals(rf_strategy, sample_data):
 
 def test_ma_strategy_update(ma_strategy, sample_data):
     """Test MACrossoverStrategy update."""
-    prepared_data = ma_strategy.prepare_data(sample_data, 'AAPL')
+    ma_strategy.train_model(sample_data, 'AAPL')
     new_dates = pd.date_range(start='2023-01-11', end='2023-01-15', freq='D')
     new_data = pd.DataFrame({
         'open': np.random.normal(150, 5, len(new_dates)),
@@ -148,8 +172,14 @@ def test_ma_strategy_update(ma_strategy, sample_data):
         'volume': np.random.randint(1000000, 5000000, len(new_dates))
     }, index=new_dates)
     ma_strategy.update(new_data, 'AAPL')
-    prepared_new_data = ma_strategy.prepare_data(new_data, 'AAPL')
-    signals = ma_strategy.generate_signals(prepared_new_data, 'AAPL', datetime.now())
+    ma_strategy.train_model(new_data, 'AAPL')
+    features = ma_strategy.feature_store.get_features(
+        symbol='AAPL',
+        data=new_data,
+        start_date=new_data.index.min().strftime('%Y-%m-%d'),
+        end_date=new_data.index.max().strftime('%Y-%m-%d')
+    )
+    signals = ma_strategy.generate_signals(features.iloc[-1].to_dict(), 'AAPL', datetime.now())
     assert isinstance(signals, StrategySignal)
 
 def test_rf_strategy_update(rf_strategy, sample_data):
@@ -157,7 +187,7 @@ def test_rf_strategy_update(rf_strategy, sample_data):
     # Add a dummy target column for the test
     sample_data_with_target = sample_data.copy()
     sample_data_with_target['target'] = np.random.choice([-1, 0, 1], len(sample_data_with_target))
-    prepared_data = rf_strategy.prepare_data(sample_data_with_target, 'AAPL')
+    rf_strategy.train_model(sample_data_with_target, 'AAPL')
     new_dates = pd.date_range(start='2023-01-11', end='2023-01-15', freq='D')
     new_data = pd.DataFrame({
         'open': np.random.normal(150, 5, len(new_dates)),
@@ -168,9 +198,15 @@ def test_rf_strategy_update(rf_strategy, sample_data):
         'target': np.random.choice([-1, 0, 1], len(new_dates))
     }, index=new_dates)
     rf_strategy.update(new_data, 'AAPL')
-    prepared_new_data = rf_strategy.prepare_data(new_data, 'AAPL')
-    # Pass only the last row as a dict
-    last_row = prepared_new_data.iloc[-1][rf_strategy.feature_columns].to_dict()
+    rf_strategy.train_model(new_data, 'AAPL')
+    features = rf_strategy.feature_store.get_features(
+        symbol='AAPL',
+        data=new_data,
+        start_date=new_data.index.min().strftime('%Y-%m-%d'),
+        end_date=new_data.index.max().strftime('%Y-%m-%d')
+    )
+    # Pass only the last row as a dict, excluding 'close' and 'target'
+    last_row = features.iloc[-1].drop(['close', 'target']).to_dict()
     signals = rf_strategy.generate_signals(last_row, 'AAPL', datetime.now())
     assert isinstance(signals, StrategySignal)
 

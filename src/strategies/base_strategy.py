@@ -30,7 +30,7 @@ class BaseStrategy(ABC):
         self.name = name
         
     @abstractmethod
-    def prepare_data(self, data: pd.DataFrame, symbol: str) -> pd.DataFrame:
+    def train_model(self, data: pd.DataFrame, symbol: str) -> None:
         """Prepare data for the strategy.
         
         Args:

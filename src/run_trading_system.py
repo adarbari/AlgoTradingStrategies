@@ -182,8 +182,8 @@ class TradingSystem:
             # Prepare data for training if in training phase
             if split_name == 'train':
                 symbol_data = self.get_data_for_split(split_name)[symbol]
-                ma_strategy.prepare_data(symbol_data, symbol)
-                ml_strategy.prepare_data(symbol_data, symbol)
+                ma_strategy.train_model(symbol_data, symbol)
+                ml_strategy.train_model(symbol_data, symbol)
             
             strategies.extend([ma_strategy, ml_strategy])
             
@@ -260,7 +260,7 @@ def main():
             symbols=['AAPL', 'MSFT', 'GOOGL'],
             initial_budget=10000.0,
             start_date=datetime(2024, 1, 1),
-            end_date=datetime(2024, 3, 31)
+            end_date=datetime(2024, 1, 31)
         )
         
         # Run training phase
