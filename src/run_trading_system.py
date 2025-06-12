@@ -21,6 +21,7 @@ from src.features.feature_store import FeatureStore
 from src.features.technical_indicators import TechnicalIndicators
 from src.data.data_loader import DataLoader
 from src.helpers.logger import TradingLogger
+from src.data.base import DataCache
 
 # Configure logging
 logging.basicConfig(
@@ -59,7 +60,9 @@ class TradingSystem:
             RandomForestStrategy()
         ]
         self.trade_executor = TradeExecutor(self.portfolio_manager, self.strategies)
-        self.data_fetcher = PolygonProvider()
+        # Initialize data cache and pass it to PolygonProvider
+        self.data_cache = DataCache()
+        self.data_fetcher = PolygonProvider(cache=self.data_cache)
         self.feature_store = FeatureStore()
         self.technical_indicators = TechnicalIndicators()
         self.logger = TradingLogger()
