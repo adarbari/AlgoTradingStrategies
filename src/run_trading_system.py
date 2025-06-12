@@ -15,19 +15,15 @@ import pandas as pd
 from src.data.vendors.polygon_provider import PolygonProvider
 from src.data.base import DataCache
 from src.features.feature_store import FeatureStore
-from src.strategies.SingleStock.ma_crossover_strategy import MACrossoverStrategy
-from src.strategies.SingleStock.random_forest_strategy import RandomForestStrategy
+from src.strategies.strategy_factory import StrategyFactory
 from src.execution.portfolio_manager import PortfolioManager
 from src.execution.trade_executor import TradeExecutor
 from src.helpers.logger import TradingLogger
 from src.utils.split_manager import SplitManager
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Initialize the trading logger first
+trading_logger = TradingLogger()
+logger = trading_logger.logger
 
 class TradingSystem:
     """Main trading system class."""
@@ -57,11 +53,8 @@ class TradingSystem:
         self.initial_budget = initial_budget
         
         # Initialize components that are phase-independent
-        self.strategies = [
-            MACrossoverStrategy(),
-            RandomForestStrategy()
-        ]
-        self.logger = TradingLogger()
+        self.strategy_factory = StrategyFactory()
+        self.logger = trading_logger  # Use the global trading logger
         # Initialize data cache and pass it to PolygonProvider
         self.data_cache = DataCache()
         self.data_fetcher = PolygonProvider(cache=self.data_cache)
@@ -82,70 +75,94 @@ class TradingSystem:
             min_train_days=min_train_days
         )
         self.split_dates = self.split_manager.get_split_dates(self.start_date, self.end_date)
-        # --- End SplitManager integration ---
         
         # Load historical data and calculate features
         self.historical_data = self._load_data()
         self.features = self._calculate_and_cache_features()
         
-    def _load_data(self) -> Dict[str, pd.DataFrame]:
-        """Load historical data for all symbols using the data/vendor layer.
+        logger.info("TradingSystem initialized with %d symbols", len(symbols))
         
-        Returns:
-            Dictionary mapping symbols to their price data
-        """
-        data = {}
+    def _load_data(self) -> Dict[str, pd.DataFrame]:
+        """Load historical data for all symbols."""
+        historical_data = {}
+        
         for symbol in self.symbols:
             try:
-                df = self.data_fetcher.get_historical_data(
-                    symbol,
-                    self.start_date,
-                    self.end_date
+                data = self.data_fetcher.get_historical_data(
+                    symbol=symbol,
+                    start_date=self.start_date,
+                    end_date=self.end_date
                 )
-                if not df.empty:
-                    data[symbol] = df
+                if not data.empty:
+                    historical_data[symbol] = data
                 else:
                     logger.warning(f"No data found for {symbol}")
             except Exception as e:
-                logger.error(f"Error loading data for {symbol}: {str(e)}")
-        return data
+                logger.error(f"Error loading data for {symbol}: {e}")
+                continue
+                
+        return historical_data
         
     def _calculate_and_cache_features(self) -> Dict[str, pd.DataFrame]:
         """Calculate and cache features for all symbols."""
         features = {}
+        
         for symbol, data in self.historical_data.items():
             try:
-                start_date = data.index.min().strftime('%Y-%m-%d')
-                end_date = data.index.max().strftime('%Y-%m-%d')
-                features_df = self.feature_store.get_features(
+                symbol_features = self.feature_store.get_features(
                     symbol=symbol,
                     data=data,
-                    start_date=start_date,
-                    end_date=end_date
+                    start_date=self.start_date.strftime('%Y-%m-%d'),
+                    end_date=self.end_date.strftime('%Y-%m-%d')
                 )
-                features[symbol] = features_df
+                if not symbol_features.empty:
+                    features[symbol] = symbol_features
             except Exception as e:
-                logger.error(f"Error calculating features for {symbol}: {str(e)}")
+                logger.error(f"Error calculating features for {symbol}: {e}")
                 continue
+                
         return features
         
     def get_data_for_split(self, split_name: str) -> Dict[str, pd.DataFrame]:
-        """Return a dict of symbol: DataFrame for the requested split ('train', 'val', 'test')."""
-        assert split_name in ('train', 'val', 'test'), "split_name must be 'train', 'val', or 'test'"
-        split_dates = self.split_dates
-        if split_name == 'train':
-            start, end = split_dates['train_start'], split_dates['train_end']
-        elif split_name == 'val':
-            start, end = split_dates['train_end'], split_dates['val_end']
-        else:  # 'test'
-            start, end = split_dates['val_end'], split_dates['test_end']
+        """Get data for a specific split (train, val, or test)."""
         split_data = {}
-        for symbol, df in self.features.items():
-            mask = (df.index >= start) & (df.index < end)
-            split_data[symbol] = df.loc[mask].copy()
+        
+        # Get the appropriate date range for the split
+        if split_name == 'train':
+            split_start = self.split_dates['train_start']
+            split_end = self.split_dates['train_end']
+        elif split_name == 'val':
+            split_start = self.split_dates['train_end']
+            split_end = self.split_dates['val_end']
+        elif split_name == 'test':
+            split_start = self.split_dates['val_end']
+            split_end = self.split_dates['test_end']
+        else:
+            raise ValueError(f"Invalid split name: {split_name}")
+        
+        for symbol, features in self.features.items():
+            mask = (features.index >= split_start) & (features.index <= split_end)
+            split_data[symbol] = features[mask]
+            
         return split_data
         
-    def run(self, split_name: str = 'train') -> None:
+    def _get_current_prices(self, timestamp: datetime) -> Dict[str, float]:
+        """Get current prices for all symbols."""
+        prices = {}
+        for symbol, data in self.historical_data.items():
+            if timestamp in data.index:
+                prices[symbol] = data.loc[timestamp, 'close']
+        return prices
+        
+    def _get_current_features(self, timestamp: datetime, split_data: Dict[str, pd.DataFrame]) -> Dict[str, Dict[str, float]]:
+        """Get current features for all symbols."""
+        features = {}
+        for symbol, data in split_data.items():
+            if timestamp in data.index:
+                features[symbol] = data.loc[timestamp].to_dict()
+        return features
+        
+    def run(self, split_name: str = 'train') -> Dict:
         """Run the trading system for a specific split ('train', 'val', or 'test')."""
         logger.info(f"Starting trading system for split: {split_name}")
         
@@ -154,7 +171,16 @@ class TradingSystem:
         
         # Initialize phase-specific components
         self.portfolio_manager = PortfolioManager(self.initial_budget)
-        self.trade_executor = TradeExecutor(self.portfolio_manager, self.strategies, trading_logger=self.logger)
+        
+        # Get ticker-specific strategies for each symbol
+        strategies = []
+        for symbol in self.symbols:
+            # Get both MA and ML strategies for each symbol
+            ma_strategy = self.strategy_factory.get_strategy(symbol, 'ma')
+            ml_strategy = self.strategy_factory.get_strategy(symbol, 'ml')
+            strategies.extend([ma_strategy, ml_strategy])
+            
+        self.trade_executor = TradeExecutor(self.portfolio_manager, strategies, trading_logger=self.logger)
         
         split_data = self.get_data_for_split(split_name)
         # Get all unique timestamps in the split
@@ -162,6 +188,7 @@ class TradingSystem:
         for data in split_data.values():
             all_timestamps.update(data.index)
         timestamps = sorted(list(all_timestamps))
+        
         # Run simulation
         for timestamp in timestamps:
             logger.info(f"Processing timestamp: {timestamp}")
@@ -197,78 +224,64 @@ class TradingSystem:
                 )
             # Log portfolio value
             portfolio_value = self.portfolio_manager.get_portfolio_value()
-            logger.info(
-                f"Portfolio value: ${portfolio_value:.2f} "
-                f"(Return: {((portfolio_value - self.initial_budget) / self.initial_budget) * 100:.2f}%)"
-            )
+            logger.info(f"Current portfolio value: ${portfolio_value:.2f}")
             
-        # Generate visualizations for each symbol after the simulation is complete
+        # Generate performance reports for each symbol
         for symbol in self.symbols:
             trades_df = pd.read_csv(self.logger.phase_files[split_name]['trades'])
-            self.logger.plot_portfolio_performance(symbol, trades_df)
-            self.logger.plot_trade_distribution(symbol, trades_df)
-            self.logger.generate_performance_report(symbol, trades_df)
-            
+            trades_df = trades_df[trades_df['symbol'] == symbol]
+            if not trades_df.empty:
+                self.logger.plot_portfolio_performance(symbol, trades_df)
+                self.logger.plot_trade_distribution(symbol, trades_df)
+                self.logger.generate_performance_report(symbol, trades_df)
+                
+        return self.get_results()
+        
     def get_results(self) -> Dict:
-        """Get trading results for the current phase.
-        
-        Returns:
-            Dictionary containing trading results and statistics
-        """
-        if self.portfolio_manager is None:
-            raise RuntimeError("No active portfolio manager. Run a phase first.")
-            
-        trade_history = self.portfolio_manager.get_trade_history()
-        summary = self.portfolio_manager.get_portfolio_summary()
-        
+        """Get trading results for the current phase."""
         return {
-            'trade_history': trade_history,
-            'portfolio_summary': summary,
-            'final_value': summary['total_value'],
-            'return_pct': summary['return_pct'],
-            'num_trades': len(trade_history),
-            'positions': summary['positions']
+            'final_value': self.portfolio_manager.get_portfolio_value(),
+            'return_pct': (self.portfolio_manager.get_portfolio_value() / self.initial_budget - 1) * 100,
+            'num_trades': len(self.portfolio_manager.positions),
+            'positions': self.portfolio_manager.positions
         }
 
-    def _get_current_features(self, timestamp: datetime, split_data: Dict[str, pd.DataFrame]) -> Dict[str, Dict[str, float]]:
-        """Get current features for all symbols at the given timestamp from split_data."""
-        features = {}
-        for symbol, df in split_data.items():
-            mask = df.index <= timestamp
-            if not mask.any():
-                continue
-            features[symbol] = df[mask].iloc[-1].to_dict()
-        return features
-        
-    def _get_current_prices(self, timestamp: datetime) -> Dict[str, float]:
-        """Get current prices for all symbols at the given timestamp from historical_data."""
-        prices = {}
-        for symbol, data in self.historical_data.items():
-            mask = data.index <= timestamp
-            if not mask.any():
-                continue
-            latest_idx = data.index[mask][-1]
-            prices[symbol] = data.loc[latest_idx, 'close']
-        return prices
-
 def main():
-    # Example usage: run all splits
-    trading_system = TradingSystem(
-        symbols=['AAPL', 'MSFT'],
-        initial_budget=100000.0,
-        start_date=datetime(2024, 1, 1),
-        end_date=datetime(2024, 3, 31)
-    )
-    for split in ['train', 'val', 'test']:
-        trading_system.run(split)
-        results = trading_system.get_results()
-        logger.info(f"\nResults for split: {split}")
-        logger.info(f"Final Portfolio Value: ${results['final_value']:.2f}")
-        logger.info(f"Return: {results['return_pct']:.2f}%")
-        logger.info(f"Number of Trades: {results['num_trades']}")
+    try:
+        # Initialize trading system
+        trading_system = TradingSystem(
+            symbols=['AAPL', 'MSFT', 'GOOGL'],
+            initial_budget=10000.0,
+            start_date=datetime(2024, 1, 1),
+            end_date=datetime(2024, 3, 31)
+        )
+        
+        # Run training phase
+        logger.info("Running training phase...")
+        training_results = trading_system.run('train')
+        
+        # Run validation phase
+        logger.info("\nRunning validation phase...")
+        validation_results = trading_system.run('val')
+        
+        # Run test phase
+        logger.info("\nRunning test phase...")
+        test_results = trading_system.run('test')
+        
+        # Print results
+        logger.info("\nTrading Results:")
+        logger.info(f"Final Portfolio Value: ${test_results['final_value']:.2f}")
+        logger.info(f"Return: {test_results['return_pct']:.2f}%")
+        logger.info(f"Number of Trades: {test_results['num_trades']}")
+        
+        # Print current positions
         logger.info("\nCurrent Positions:")
-        for symbol, position in results['positions'].items():
+        for symbol, position in test_results['positions'].items():
             logger.info(f"{symbol}: {position['quantity']} shares at ${position['avg_price']:.2f}")
+            
+    except Exception as e:
+        logger.error(f"Error running trading system: {str(e)}")
+        raise
 
 if __name__ == "__main__":
     main() 

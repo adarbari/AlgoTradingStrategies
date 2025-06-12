@@ -57,19 +57,9 @@ class PortfolioManager:
         Returns:
             bool: True if position size is valid
         """
-        # Check if we have enough cash for at least a minimum position
-        min_position_value = 1000  # Minimum $1000 position
-        if quantity * price < min_position_value:
-            return False
-            
         # Check if we have enough cash
         if not self.can_buy(symbol, quantity, price):
-            # Try to reduce position size to fit available cash
-            max_quantity = int(self.cash / price)
-            if max_quantity * price >= min_position_value:
-                quantity = max_quantity
-            else:
-                return False
+            return False
             
         # Check if position size is within limits
         position_value = quantity * price
@@ -104,13 +94,11 @@ class PortfolioManager:
             bool: True if position was updated successfully
         """
         if quantity > 0:  # Buy
+            if not self.can_buy(symbol, quantity, price):
+                return False
+                
             if not self.validate_position_size(symbol, quantity, price):
-                # Try to reduce position size to fit available cash
-                max_quantity = int(self.cash / price)
-                if max_quantity * price >= 1000:  # Minimum $1000 position
-                    quantity = max_quantity
-                else:
-                    return False
+                return False
                 
             cost = quantity * price
             self.cash -= cost
@@ -147,23 +135,29 @@ class PortfolioManager:
                 self.positions[symbol]['quantity'] = new_quantity
         
         # Record trade
-        self.trade_history.append({
+        trade_record = {
             'timestamp': timestamp,
             'symbol': symbol,
             'action': 'BUY' if quantity > 0 else 'SELL',
             'quantity': abs(quantity),
             'price': price,
             'total': abs(quantity) * price
-        })
+        }
+        self.trade_history.append(trade_record)
         
         return True
     
     def get_portfolio_summary(self) -> Dict:
         """Get current portfolio summary."""
-        positions_value = sum(
-            pos['quantity'] * pos['avg_price'] 
-            for pos in self.positions.values()
-        )
+        positions_value = 0.0
+        for symbol, position in self.positions.items():
+            if symbol in self.current_prices:
+                current_price = self.current_prices[symbol]
+                positions_value += position['quantity'] * current_price
+            else:
+                # Fallback to average price if current price not available
+                positions_value += position['quantity'] * position['avg_price']
+                
         total_value = self.cash + positions_value
         
         return {

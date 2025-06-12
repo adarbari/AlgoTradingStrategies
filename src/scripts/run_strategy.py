@@ -18,6 +18,7 @@ from src.visualization.portfolio_visualizer import (
 )
 import pandas as pd
 from src.data.base import DataCache
+import numpy as np
 
 def main():
     parser = argparse.ArgumentParser(description='Run trading strategy')
@@ -31,58 +32,47 @@ def main():
     # Initialize trading logger
     trading_logger = TradingLogger()
     logger = trading_logger.logger
-
+    
     try:
-        # Initialize data cache
+        logger.info("Starting strategy run for %s using %s strategy", args.symbol, args.strategy)
+        logger.info("Date range: %s to %s", args.start_date, args.end_date)
+        
+        # Initialize data provider
         data_cache = DataCache()
-        # Initialize data provider with cache
         data_provider = PolygonProvider(cache=data_cache)
-
-        # Fetch historical data
-        logger.info(f"Fetching historical data for {args.symbol}")
+        
+        # Get historical data
+        start_date = datetime.strptime(args.start_date, '%Y-%m-%d')
+        end_date = datetime.strptime(args.end_date, '%Y-%m-%d')
+        
         data = data_provider.get_historical_data(
             symbol=args.symbol,
-            start_date=datetime.strptime(args.start_date, '%Y-%m-%d'),
-            end_date=datetime.strptime(args.end_date, '%Y-%m-%d')
+            start_date=start_date,
+            end_date=end_date
         )
-
-        if data is None or data.empty:
-            logger.error("No data received from provider")
+        
+        if data.empty:
+            logger.error("No data found for %s in the specified date range", args.symbol)
             return
-
-        # Initialize strategy based on the --strategy argument
-        if args.strategy == 'ml':
-            # strategy = RandomForestSingleStockStrategy(cache_dir=args.cache_dir)
-            raise NotImplementedError('RandomForestSingleStockStrategy is not available.')
+            
+        logger.info("Retrieved %d data points for %s", len(data), args.symbol)
+        
+        # Initialize strategy
+        if args.strategy == 'ma':
+            strategy = MACrossoverStrategy()
         else:
-            strategy = MACrossoverStrategy(cache_dir=args.cache_dir)
-
-        # Initialize strategy manager with existing trading logger
+            logger.error("Unsupported strategy type: %s", args.strategy)
+            return
+            
+        # Initialize strategy manager
         strategy_manager = StrategyManager(trading_logger=trading_logger)
         strategy_manager.initialize_strategy(args.symbol, args.strategy)
-
-        # Prepare data for the strategy
-        prepared_data = strategy.prepare_data(data, args.symbol)
-
-        # Generate signals for each time step
-        signals_list = []
-        for index, row in prepared_data.iterrows():
-            features = row.to_dict()
-            signal = strategy.generate_signals(features, args.symbol, index)
-            signals_list.append(signal)
-
-        # Convert signals list to DataFrame
-        signals = pd.DataFrame(signals_list)
-
-        # Include original price data in signals DataFrame
-        signals['close'] = prepared_data['close']
-
-        if signals.empty:
-            logger.error("No signals generated")
-            return
-
+        
+        # Generate signals
+        signals = strategy.generate_signals(data, args.symbol, start_date)
+        
         # Calculate returns
-        signals['returns'] = signals['close'].pct_change().fillna(0)
+        signals['returns'] = signals['close'].pct_change()
         signals['strategy_returns'] = signals['returns'] * (signals['action'] == 'BUY').astype(int)
         cumulative_returns = (1 + signals['strategy_returns']).cumprod()
         
@@ -132,8 +122,31 @@ def main():
                     profit=profit
                 )
         
-        # Get strategy summary
-        summary = strategy_manager.get_strategy_summary()
+        # Calculate strategy summary
+        total_trades = len(signals[signals['action'].isin(['BUY', 'SELL'])])
+        winning_trades = len(signals[(signals['action'] == 'SELL') & (signals['strategy_returns'] > 0)])
+        win_rate = winning_trades / total_trades if total_trades > 0 else 0
+        total_profit = signals['strategy_returns'].sum()
+        avg_profit_per_trade = total_profit / total_trades if total_trades > 0 else 0
+        
+        # Calculate drawdown
+        cumulative_returns = (1 + signals['strategy_returns']).cumprod()
+        rolling_max = cumulative_returns.expanding().max()
+        drawdowns = (cumulative_returns - rolling_max) / rolling_max
+        max_drawdown = drawdowns.min() * 100
+        
+        # Calculate Sharpe ratio
+        returns = signals['strategy_returns']
+        sharpe_ratio = np.sqrt(252) * returns.mean() / returns.std() if len(returns) > 0 else 0
+        
+        summary = {
+            'total_trades': total_trades,
+            'win_rate': win_rate * 100,
+            'total_profit': total_profit,
+            'avg_profit_per_trade': avg_profit_per_trade,
+            'max_drawdown': max_drawdown,
+            'sharpe_ratio': sharpe_ratio
+        }
         
         # Display results
         logger.info("\nStrategy Results:")
@@ -164,5 +177,5 @@ def main():
         logger.error(f"Error running strategy: {str(e)}")
         raise
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main() 

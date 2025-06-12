@@ -12,6 +12,7 @@ class TradingLogger:
     """Manages logging for the trading system."""
     
     def __init__(self):
+        # Create base directories
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.run_timestamp_dir = os.path.join(os.getcwd(), "logs", f"run_{timestamp}")
         os.makedirs(self.run_timestamp_dir, exist_ok=True)
@@ -27,7 +28,6 @@ class TradingLogger:
             os.makedirs(phase_dir, exist_ok=True)
             os.makedirs(os.path.join(phase_dir, "logs"), exist_ok=True)
             os.makedirs(os.path.join(phase_dir, "visualizations"), exist_ok=True)
-            # Create ticker-specific subdirectory
             os.makedirs(os.path.join(phase_dir, "ticker"), exist_ok=True)
         
         # Initialize log files for each phase
@@ -60,14 +60,22 @@ class TradingLogger:
         
         # Add file handler for the main log file
         main_log_file = os.path.join(self.run_timestamp_dir, "trading.log")
-        file_handler = logging.FileHandler(main_log_file)
+        file_handler = logging.FileHandler(main_log_file, mode='w')  # Use 'w' mode to overwrite
         file_handler.setLevel(logging.INFO)
         file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         file_handler.setFormatter(file_formatter)
         self.logger.addHandler(file_handler)
         
+        # Ensure all loggers propagate to root
+        for name in logging.root.manager.loggerDict:
+            logging.getLogger(name).propagate = True
+        
         self.last_timestamp = None
         self.current_phase = 'train'  # Default phase
+        
+        # Log initialization
+        self.logger.info("TradingLogger initialized with timestamp: %s", timestamp)
+        self.logger.info("Log directory: %s", self.run_timestamp_dir)
         
     def set_phase(self, phase: str):
         """Set the current phase (train, val, or test)"""
@@ -78,11 +86,14 @@ class TradingLogger:
         
         # Add phase-specific file handler
         phase_log_file = os.path.join(self.phase_dirs[phase], "logs", "trading.log")
-        phase_handler = logging.FileHandler(phase_log_file)
+        phase_handler = logging.FileHandler(phase_log_file, mode='w')  # Use 'w' mode to overwrite
         phase_handler.setLevel(logging.INFO)
         phase_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         phase_handler.setFormatter(phase_formatter)
         self.logger.addHandler(phase_handler)
+        
+        # Log phase switch
+        self.logger.info("Phase-specific logging initialized for %s", phase)
         
     def log_trade(self, symbol: str, trade_type: str, price: float, shares: float, 
                  timestamp: datetime, profit: Optional[float] = None, 
