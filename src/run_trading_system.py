@@ -257,7 +257,7 @@ def main():
         symbols=['AAPL', 'MSFT'],
         initial_budget=100000.0,
         start_date=datetime(2024, 1, 1),
-        end_date=datetime(2024, 12, 31)
+        end_date=datetime(2024, 3, 31)
     )
     for split in ['train', 'val', 'test']:
         trading_system.run(split)

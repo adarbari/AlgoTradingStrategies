@@ -57,16 +57,25 @@ class PortfolioManager:
         Returns:
             bool: True if position size is valid
         """
-        # Check if we have enough cash
-        if not self.can_buy(symbol, quantity, price):
+        # Check if we have enough cash for at least a minimum position
+        min_position_value = 1000  # Minimum $1000 position
+        if quantity * price < min_position_value:
             return False
             
-        # Check if position size is within limits (e.g., max 20% of portfolio)
+        # Check if we have enough cash
+        if not self.can_buy(symbol, quantity, price):
+            # Try to reduce position size to fit available cash
+            max_quantity = int(self.cash / price)
+            if max_quantity * price >= min_position_value:
+                quantity = max_quantity
+            else:
+                return False
+            
+        # Check if position size is within limits
         position_value = quantity * price
         portfolio_value = self.get_portfolio_value()
-        max_position_value = portfolio_value * 0.2  # 20% limit
         
-        return position_value <= max_position_value
+        return position_value <= portfolio_value
     
     def can_buy(self, symbol: str, quantity: int, price: float) -> bool:
         """Check if we can buy the specified quantity at the given price."""
@@ -76,7 +85,11 @@ class PortfolioManager:
     def can_sell(self, symbol: str, quantity: int) -> bool:
         """Check if we can sell the specified quantity."""
         position = self.positions.get(symbol)
-        return position is not None and position['quantity'] >= abs(quantity)
+        if position is None:
+            return False
+            
+        # Allow partial sells
+        return position['quantity'] >= abs(quantity)
     
     def update_position(self, symbol: str, quantity: int, price: float, timestamp: datetime) -> bool:
         """Update position after a trade is executed.
@@ -92,7 +105,12 @@ class PortfolioManager:
         """
         if quantity > 0:  # Buy
             if not self.validate_position_size(symbol, quantity, price):
-                return False
+                # Try to reduce position size to fit available cash
+                max_quantity = int(self.cash / price)
+                if max_quantity * price >= 1000:  # Minimum $1000 position
+                    quantity = max_quantity
+                else:
+                    return False
                 
             cost = quantity * price
             self.cash -= cost

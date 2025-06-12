@@ -8,8 +8,6 @@ from typing import Dict, Optional
 import json
 import numpy as np
 
-logger = logging.getLogger(__name__)
-
 class TradingLogger:
     """Manages logging for the trading system."""
     
@@ -41,29 +39,36 @@ class TradingLogger:
             }
             # Create headers if files don't exist
             if not os.path.exists(self.phase_files[phase]['trades']):
-                pd.DataFrame(columns=['symbol', 'trade_type', 'price', 'shares', 'timestamp', 'profit', 'portfolio_value']).to_csv(self.phase_files[phase]['trades'], index=False)
+                pd.DataFrame(columns=['symbol', 'trade_type', 'price', 'shares', 'timestamp', 'profit', 'portfolio_value', 'cash']).to_csv(self.phase_files[phase]['trades'], index=False)
             if not os.path.exists(self.phase_files[phase]['periods']):
                 pd.DataFrame(columns=['symbol', 'timestamp', 'open', 'high', 'low', 'close', 'volume', 'signal', 'returns', 'strategy_returns']).to_csv(self.phase_files[phase]['periods'], index=False)
         
-        self._setup_logging()
-        self.logger = logging.getLogger(__name__)
+        # Setup root logger
+        self.logger = logging.getLogger()
+        self.logger.setLevel(logging.INFO)
+        
+        # Remove any existing handlers
+        for handler in self.logger.handlers[:]:
+            self.logger.removeHandler(handler)
+        
+        # Add console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+        console_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        console_handler.setFormatter(console_formatter)
+        self.logger.addHandler(console_handler)
+        
+        # Add file handler for the main log file
+        main_log_file = os.path.join(self.run_timestamp_dir, "trading.log")
+        file_handler = logging.FileHandler(main_log_file)
+        file_handler.setLevel(logging.INFO)
+        file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        file_handler.setFormatter(file_formatter)
+        self.logger.addHandler(file_handler)
+        
         self.last_timestamp = None
         self.current_phase = 'train'  # Default phase
         
-    def _setup_logging(self):
-        """Setup logging directory and configuration"""
-        # Setup logging configuration for each phase
-        for phase, phase_dir in self.phase_dirs.items():
-            log_file = os.path.join(phase_dir, "logs", "trading.log")
-            logging.basicConfig(
-                level=logging.INFO,
-                format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                handlers=[
-                    logging.FileHandler(log_file),
-                    logging.StreamHandler()
-                ]
-            )
-    
     def set_phase(self, phase: str):
         """Set the current phase (train, val, or test)"""
         if phase not in ['train', 'val', 'test']:
@@ -71,19 +76,46 @@ class TradingLogger:
         self.current_phase = phase
         self.logger.info(f"Switched to {phase} phase")
         
+        # Add phase-specific file handler
+        phase_log_file = os.path.join(self.phase_dirs[phase], "logs", "trading.log")
+        phase_handler = logging.FileHandler(phase_log_file)
+        phase_handler.setLevel(logging.INFO)
+        phase_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        phase_handler.setFormatter(phase_formatter)
+        self.logger.addHandler(phase_handler)
+        
     def log_trade(self, symbol: str, trade_type: str, price: float, shares: float, 
                  timestamp: datetime, profit: Optional[float] = None, 
-                 portfolio_value: Optional[float] = None):
+                 portfolio_value: Optional[float] = None, cash: Optional[float] = None):
         """Log a trade with detailed information"""
         # Convert timestamp to string if it's a pandas Timestamp or datetime
         if hasattr(timestamp, 'isoformat'):
             ts_str = timestamp.isoformat()
         else:
             ts_str = str(timestamp)
+            
         def safe_float(val):
             return float(val) if pd.notnull(val) else None
         def safe_int(val, default=0):
             return int(val) if pd.notnull(val) else default
+            
+        # Calculate profit for SELL trades if not provided
+        if trade_type == 'SELL' and profit is None:
+            # Read previous trades for this symbol to find the buy price
+            trades_file = self.phase_files[self.current_phase]['trades']
+            if os.path.exists(trades_file):
+                trades_df = pd.read_csv(trades_file)
+                symbol_trades = trades_df[trades_df['symbol'] == symbol]
+                if not symbol_trades.empty:
+                    # Find the last BUY trade for this symbol
+                    buy_trades = symbol_trades[symbol_trades['trade_type'] == 'BUY']
+                    if not buy_trades.empty:
+                        last_buy = buy_trades.iloc[-1]
+                        buy_price = last_buy['price']
+                        buy_shares = last_buy['shares']
+                        # Calculate profit based on the difference in price
+                        profit = (price - buy_price) * min(shares, buy_shares)
+        
         trade_data = {
             'symbol': symbol,
             'trade_type': trade_type,
@@ -91,7 +123,8 @@ class TradingLogger:
             'shares': safe_int(shares),
             'timestamp': ts_str,
             'profit': safe_float(profit),
-            'portfolio_value': safe_float(portfolio_value)
+            'portfolio_value': safe_float(portfolio_value),
+            'cash': safe_float(cash)
         }
         
         # Log to file
@@ -103,7 +136,7 @@ class TradingLogger:
         # Append to ticker-specific trades CSV
         ticker_trades_file = os.path.join(self.phase_dirs[self.current_phase], "ticker", f"{symbol}_trades.csv")
         if not os.path.exists(ticker_trades_file):
-            pd.DataFrame(columns=['symbol', 'trade_type', 'price', 'shares', 'timestamp', 'profit', 'portfolio_value']).to_csv(ticker_trades_file, index=False)
+            pd.DataFrame(columns=['symbol', 'trade_type', 'price', 'shares', 'timestamp', 'profit', 'portfolio_value', 'cash']).to_csv(ticker_trades_file, index=False)
         pd.DataFrame([trade_data]).to_csv(ticker_trades_file, mode='a', header=False, index=False)
         
     def log_period(self, symbol: str, timestamp: datetime, data: Dict):
@@ -178,7 +211,7 @@ class TradingLogger:
         pv_col = 'portfolio_value'
         
         if trades.empty:
-            logger.warning(f"No trades were executed for {symbol} in the {self.current_phase} phase.")
+            self.logger.warning(f"No trades were executed for {symbol} in the {self.current_phase} phase.")
             return {
                 "symbol": symbol,
                 "phase": self.current_phase,

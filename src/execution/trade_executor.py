@@ -30,6 +30,7 @@ class TradeExecutor:
         self.current_prices: Dict[str, float] = {}
         self.current_features: Dict[str, Dict[str, float]] = {}  # symbol -> features
         self.trading_logger = trading_logger if trading_logger is not None else TradingLogger()
+        self.max_position_value = 2000
         logger.info("TradeExecutor initialized with %d strategies", len(strategies))
 
     def update_prices(self, prices: Dict[str, float]):
@@ -79,15 +80,19 @@ class TradeExecutor:
             if symbol not in self.current_prices:
                 logger.error("Symbol %s not found in current prices for trade execution", symbol)
                 continue
+                
             current_price = self.current_prices[symbol]
             action = None
             confidence = abs(weighted_signal)
-            if weighted_signal >= 0.5:
+            
+            # More lenient signal thresholds
+            if weighted_signal >= 0.3:  # Lowered from 0.5
                 action = 'BUY'
-            elif weighted_signal <= -0.5:
+            elif weighted_signal <= -0.3:  # Raised from -0.5
                 action = 'SELL'
             else:
-                continue  # No trade if signal is weak
+                continue  # No trade if signal is too weak
+                
             quantity = self._calculate_position_size(symbol, current_price, confidence)
             if quantity > 0:
                 trade = Trade(
@@ -100,13 +105,14 @@ class TradeExecutor:
                     confidence=confidence
                 )
                 trades.append(trade)
+                
         logger.info("Generated %d trade decisions", len(trades))
         
         # Execute trades
         executed_trades = []
         for trade in trades:
             try:
-                if self._execute_trade(trade,timestamp):
+                if self._execute_trade(trade, timestamp):
                     executed_trades.append(trade)
                     logger.info("Executed trade: %s %s %.2f shares at $%.2f", 
                               trade.action, trade.symbol, trade.quantity, trade.price)
@@ -151,17 +157,19 @@ class TradeExecutor:
         
     def _calculate_position_size(self, symbol: str, price: float, confidence: float) -> float:
         """Calculate position size based on portfolio value and confidence"""
-        portfolio_value = self.portfolio_manager.get_portfolio_value()
-        max_position_value = portfolio_value * 0.2  # Maximum 20% of portfolio per position
-        position_value = max_position_value * confidence
+            
+        
+        # Calculate base quantity
+        position_value = self.max_position_value * confidence
         quantity = position_value / price
         
+        # Round to nearest whole share
+        quantity = round(quantity)
+        
         logger.info("Position size calculation for %s:", symbol)
-        logger.info("  Portfolio value: $%.2f", portfolio_value)
-        logger.info("  Max position value: $%.2f", max_position_value)
         logger.info("  Confidence: %.2f", confidence)
         logger.info("  Position value: $%.2f", position_value)
-        logger.info("  Calculated quantity: %.2f shares", quantity)
+        logger.info("  Calculated quantity: %d shares", quantity)
         
         return quantity
         
@@ -193,13 +201,15 @@ class TradeExecutor:
                 logger.info("Successfully executed %s trade for %s", trade.action, trade.symbol)
                 # Log the trade to CSV
                 portfolio_value = self.portfolio_manager.get_portfolio_value()
+                cash = self.portfolio_manager.cash
                 self.trading_logger.log_trade(
                     symbol=trade.symbol,
                     trade_type=trade.action,
                     price=trade.price,
                     shares=trade.quantity,
                     timestamp=timestamp,
-                    portfolio_value=portfolio_value
+                    portfolio_value=portfolio_value,
+                    cash=cash
                 )
             else:
                 logger.warning("Failed to execute %s trade for %s", trade.action, trade.symbol)
