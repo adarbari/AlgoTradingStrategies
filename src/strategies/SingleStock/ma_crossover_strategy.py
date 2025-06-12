@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 import logging
 
-from src.features.feature_store import FeatureStore
+from src.features.feature_provider import FeatureProvider
 from src.features.technical_indicators import TechnicalIndicators
 from src.strategies.base_strategy import BaseStrategy, StrategySignal
 
@@ -37,7 +37,7 @@ class MACrossoverStrategy(BaseStrategy):
         self.short_window = short_window
         self.long_window = long_window
         self.cache_dir = cache_dir
-        self.feature_store = FeatureStore(cache_dir=cache_dir)
+        self.feature_provider = FeatureProvider()
         self._prev_features = None  # Store previous features for crossover detection
         self.technical_indicators = TechnicalIndicators()
         
@@ -59,24 +59,15 @@ class MACrossoverStrategy(BaseStrategy):
         print(f"Looking for features in cache: {symbol} from {start_date} to {end_date}")
         print(f"Cache directory: {self.cache_dir}")
         
-        # Try to get cached features
-        features = self.feature_store.get_cached_features(
-            symbol, 
-            start_date, 
-            end_date
+        # Get features using the feature provider
+        features = self.feature_provider.get_features(
+            symbol=symbol,
+            data=data,
+            start_date=start_date,
+            end_date=end_date
         )
-
-        if features is None:
-            print("No cached features found, calculating moving averages...")
-            features = self.feature_store.calculate_and_cache_features(
-                symbol,
-                data,
-                start_date,
-                end_date
-            )
-        else:
-            print(f"Found cached features with columns: {features.columns.tolist()}")
-
+        
+        print(f"Found features with columns: {features.columns.tolist()}")
         return features
     
     def generate_signals(

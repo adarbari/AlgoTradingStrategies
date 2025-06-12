@@ -19,8 +19,12 @@ def sample_data():
     """Create sample price data for testing."""
     dates = pd.date_range(start='2023-01-01', end='2023-01-10', freq='D')
     data = pd.DataFrame({
-        'AAPL': np.random.normal(150, 5, len(dates)),
-        'MSFT': np.random.normal(200, 5, len(dates))
+        'open': np.random.normal(150, 5, len(dates)),
+        'high': np.random.normal(155, 5, len(dates)),
+        'low': np.random.normal(145, 5, len(dates)),
+        'close': np.random.normal(150, 5, len(dates)),
+        'volume': np.random.randint(1000000, 5000000, len(dates)),
+        'target': np.random.choice([-1, 0, 1], len(dates))
     }, index=dates)
     return data
 
@@ -148,7 +152,11 @@ def test_ma_strategy_update(ma_strategy, sample_data):
     prepared_data = ma_strategy.prepare_data(sample_data, 'AAPL')
     new_dates = pd.date_range(start='2023-01-11', end='2023-01-15', freq='D')
     new_data = pd.DataFrame({
-        'AAPL': np.random.normal(150, 5, len(new_dates))
+        'open': np.random.normal(150, 5, len(new_dates)),
+        'high': np.random.normal(155, 5, len(new_dates)),
+        'low': np.random.normal(145, 5, len(new_dates)),
+        'close': np.random.normal(150, 5, len(new_dates)),
+        'volume': np.random.randint(1000000, 5000000, len(new_dates))
     }, index=new_dates)
     ma_strategy.update(new_data, 'AAPL')
     prepared_new_data = ma_strategy.prepare_data(new_data, 'AAPL')
@@ -158,10 +166,18 @@ def test_ma_strategy_update(ma_strategy, sample_data):
 @pytest.mark.slow
 def test_rf_strategy_update(rf_strategy, sample_data):
     """Test RandomForestStrategy update."""
-    prepared_data = rf_strategy.prepare_data(sample_data, 'AAPL')
+    # Add a dummy target column for the test
+    sample_data_with_target = sample_data.copy()
+    sample_data_with_target['target'] = np.random.choice([-1, 0, 1], len(sample_data_with_target))
+    prepared_data = rf_strategy.prepare_data(sample_data_with_target, 'AAPL')
     new_dates = pd.date_range(start='2023-01-11', end='2023-01-15', freq='D')
     new_data = pd.DataFrame({
-        'AAPL': np.random.normal(150, 5, len(new_dates))
+        'open': np.random.normal(150, 5, len(new_dates)),
+        'high': np.random.normal(155, 5, len(new_dates)),
+        'low': np.random.normal(145, 5, len(new_dates)),
+        'close': np.random.normal(150, 5, len(new_dates)),
+        'volume': np.random.randint(1000000, 5000000, len(new_dates)),
+        'target': np.random.choice([-1, 0, 1], len(new_dates))
     }, index=new_dates)
     rf_strategy.update(new_data, 'AAPL')
     prepared_new_data = rf_strategy.prepare_data(new_data, 'AAPL')

@@ -17,11 +17,9 @@ from src.execution.trade_executor import TradeExecutor
 from src.strategies.SingleStock.ma_crossover_strategy import MACrossoverStrategy
 from src.strategies.SingleStock.random_forest_strategy import RandomForestStrategy
 from src.data.vendors.polygon_provider import PolygonProvider
-from src.features.feature_store import FeatureStore
-from src.features.technical_indicators import TechnicalIndicators
-from src.data.data_loader import DataLoader
-from src.helpers.logger import TradingLogger
 from src.data.base import DataCache
+from src.features.feature_provider import FeatureProvider
+from src.helpers.logger import TradingLogger
 
 # Configure logging
 logging.basicConfig(
@@ -63,8 +61,8 @@ class TradingSystem:
         # Initialize data cache and pass it to PolygonProvider
         self.data_cache = DataCache()
         self.data_fetcher = PolygonProvider(cache=self.data_cache)
-        self.feature_store = FeatureStore()
-        self.technical_indicators = TechnicalIndicators()
+        # Initialize feature provider with its own cache
+        self.feature_provider = FeatureProvider()
         self.logger = TradingLogger()
         
         # Load historical data and calculate features
@@ -93,7 +91,7 @@ class TradingSystem:
                 logger.error(f"Error loading data for {symbol}: {str(e)}")
         return data
 
-    def _calculate_and_cache_features(self) -> None:
+    def _calculate_and_cache_features(self) -> Dict[str, pd.DataFrame]:
         """Calculate and cache features for all symbols."""
         features = {}
         for symbol, data in self.historical_data.items():
@@ -102,32 +100,18 @@ class TradingSystem:
                 start_date = data.index.min().strftime('%Y-%m-%d')
                 end_date = data.index.max().strftime('%Y-%m-%d')
                 
-                # Try to get features from cache first
-                features_df = self.feature_store.get_cached_features(
+                # Get features using the feature provider
+                features_df = self.feature_provider.get_features(
                     symbol=symbol,
+                    data=data,
                     start_date=start_date,
                     end_date=end_date
                 )
-                
-                # If no cached features found, calculate and cache them
-                if features_df is None:
-                    features_df = self.technical_indicators.calculate_features(
-                        data,
-                        None,  # Calculate all available features
-                        symbol=symbol
-                    )
-                    # Cache the calculated features
-                    self.feature_store.cache_features(
-                        symbol=symbol,
-                        start_date=start_date,
-                        end_date=end_date,
-                        features_df=features_df
-                    )
                 features[symbol] = features_df
             except Exception as e:
                 logger.error(f"Error calculating features for {symbol}: {str(e)}")
                 continue
-            return features
+        return features
         
     def _get_current_features(self, timestamp: datetime) -> Dict[str, Dict[str, float]]:
         """Get current features for all symbols at the given timestamp.
