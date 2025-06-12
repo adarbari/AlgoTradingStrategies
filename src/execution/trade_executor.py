@@ -6,6 +6,7 @@ from src.strategies.base_strategy import BaseStrategy, StrategySignal
 from src.helpers.logger import TradingLogger
 import logging
 from collections import defaultdict
+from src.strategies.strategy_factory import StrategyFactory
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ class TradeExecutor:
     """
     def __init__(self, portfolio_manager: PortfolioManager, strategies: List[BaseStrategy], trading_logger: Optional[TradingLogger] = None):
         self.portfolio_manager = portfolio_manager
-        self.strategies = strategies
+        self.strategy_factory = StrategyFactory()
         self.current_prices: Dict[str, float] = {}
         self.current_features: Dict[str, Dict[str, float]] = {}  # symbol -> features
         self.trading_logger = trading_logger if trading_logger is not None else TradingLogger()
@@ -51,21 +52,23 @@ class TradeExecutor:
         # Get signals from all strategies for all symbols
         all_signals: List[StrategySignal] = []
         
-        for strategy in self.strategies:
-            strategy_name = strategy.__class__.__name__
-            for symbol, features in self.current_features.items():
+        for symbol, features in self.current_features.items():
+             # Get both MA and ML strategies for each symbol
+            ma_strategy = self.strategy_factory.get_strategy(symbol, 'ma')
+            ml_strategy = self.strategy_factory.get_strategy(symbol, 'ml')
+            
+            for strategy in [ma_strategy, ml_strategy]:
                 try:
                     if symbol not in self.current_prices:
                         logger.error("Symbol %s not found in current prices", symbol)
                         continue
                         
                     signal = strategy.generate_signals(features, symbol, timestamp)
-                    logger.info("Strategy %s generated signal for %s: %s", strategy_name, symbol, signal)
+                    logger.info("Strategy %s generated signal for %s: %s", strategy.name, symbol, signal)
                     all_signals.append(signal)
                 except Exception as e:
-                    logger.error("Error generating signals for strategy %s, symbol %s: %s", strategy_name, symbol, str(e))
+                    logger.error("Error generating signals for strategy %s, symbol %s: %s", strategy.name, symbol, str(e))
                     continue
-        
         if not all_signals:
             logger.info("No signals generated for timestamp %s", timestamp)
             return []

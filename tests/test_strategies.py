@@ -72,14 +72,12 @@ def rf_strategy(mock_feature_store):
     strategy.feature_store = mock_feature_store
     return strategy
 
-@pytest.mark.slow
 def test_ma_strategy_initialization(ma_strategy):
     """Test MACrossoverStrategy initialization."""
     assert ma_strategy.short_window == 5
     assert ma_strategy.long_window == 20
     assert ma_strategy.cache_dir == 'tests/cache'
 
-@pytest.mark.slow
 def test_rf_strategy_initialization(rf_strategy):
     """Test RandomForestStrategy initialization."""
     assert rf_strategy.n_estimators == 10
@@ -89,7 +87,6 @@ def test_rf_strategy_initialization(rf_strategy):
     assert rf_strategy.cache_dir == 'tests/cache'
     assert isinstance(rf_strategy.feature_store, FeatureStore)
 
-@pytest.mark.slow
 def test_ma_strategy_prepare_data(ma_strategy, sample_data):
     """Test MACrossoverStrategy data preparation."""
     prepared_data = ma_strategy.prepare_data(sample_data, 'AAPL')
@@ -99,7 +96,6 @@ def test_ma_strategy_prepare_data(ma_strategy, sample_data):
     assert technical_indicators.FeatureNames.MA_SHORT in prepared_data.columns
     assert technical_indicators.FeatureNames.MA_LONG in prepared_data.columns
 
-@pytest.mark.slow
 def test_rf_strategy_prepare_data(rf_strategy, sample_data):
     """Test RandomForestStrategy data preparation."""
     prepared_data = rf_strategy.prepare_data(sample_data, 'AAPL')
@@ -108,7 +104,6 @@ def test_rf_strategy_prepare_data(rf_strategy, sample_data):
     assert 'target' in prepared_data.columns
     assert rf_strategy.model is not None
 
-@pytest.mark.slow
 def test_ma_strategy_generate_signals(ma_strategy, sample_data):
     """Test MACrossoverStrategy signal generation."""
     prepared_data = ma_strategy.prepare_data(sample_data, 'AAPL')
@@ -125,8 +120,6 @@ def test_ma_strategy_generate_signals(ma_strategy, sample_data):
     assert 'HOLD' in probs
     assert sum(probs.values()) == pytest.approx(1.0)
 
-@pytest.mark.skip(reason="RandomForestStrategy not predicting SELL signals for the given input data.")
-@pytest.mark.slow
 def test_rf_strategy_generate_signals(rf_strategy, sample_data):
     """Test RandomForestStrategy signal generation."""
     prepared_data = rf_strategy.prepare_data(sample_data, 'AAPL')
@@ -143,7 +136,6 @@ def test_rf_strategy_generate_signals(rf_strategy, sample_data):
     assert 'BUY' in probs
     assert 'SELL' in probs
 
-@pytest.mark.slow
 def test_ma_strategy_update(ma_strategy, sample_data):
     """Test MACrossoverStrategy update."""
     prepared_data = ma_strategy.prepare_data(sample_data, 'AAPL')
@@ -160,7 +152,6 @@ def test_ma_strategy_update(ma_strategy, sample_data):
     signals = ma_strategy.generate_signals(prepared_new_data, 'AAPL', datetime.now())
     assert isinstance(signals, StrategySignal)
 
-@pytest.mark.slow
 def test_rf_strategy_update(rf_strategy, sample_data):
     """Test RandomForestStrategy update."""
     # Add a dummy target column for the test
@@ -183,7 +174,6 @@ def test_rf_strategy_update(rf_strategy, sample_data):
     signals = rf_strategy.generate_signals(last_row, 'AAPL', datetime.now())
     assert isinstance(signals, StrategySignal)
 
-@pytest.mark.slow
 def test_ma_strategy_parameters(ma_strategy):
     """Test MACrossoverStrategy parameter management."""
     # Get current parameters
@@ -202,7 +192,6 @@ def test_ma_strategy_parameters(ma_strategy):
     assert ma_strategy.short_window == 10
     assert ma_strategy.long_window == 30
 
-@pytest.mark.slow
 def test_rf_strategy_parameters(rf_strategy):
     """Test RandomForestStrategy parameter management."""
     # Get current parameters

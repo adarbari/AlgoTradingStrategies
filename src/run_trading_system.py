@@ -178,6 +178,13 @@ class TradingSystem:
             # Get both MA and ML strategies for each symbol
             ma_strategy = self.strategy_factory.get_strategy(symbol, 'ma')
             ml_strategy = self.strategy_factory.get_strategy(symbol, 'ml')
+            
+            # Prepare data for training if in training phase
+            if split_name == 'train':
+                symbol_data = self.get_data_for_split(split_name)[symbol]
+                ma_strategy.prepare_data(symbol_data, symbol)
+                ml_strategy.prepare_data(symbol_data, symbol)
+            
             strategies.extend([ma_strategy, ml_strategy])
             
         self.trade_executor = TradeExecutor(self.portfolio_manager, strategies, trading_logger=self.logger)

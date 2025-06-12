@@ -9,7 +9,7 @@ import numpy as np
 import logging
 
 from src.features.feature_store import FeatureStore
-from src.features.technical_indicators import TechnicalIndicators
+from src.features.technical_indicators import TechnicalIndicators, FeatureNames
 from src.strategies.base_strategy import BaseStrategy, StrategySignal
 
 class MACrossoverStrategy(BaseStrategy):
@@ -91,8 +91,8 @@ class MACrossoverStrategy(BaseStrategy):
         current_features = features.copy()
 
         # Get 'ma_short' and 'ma_long' features from technical indicators
-        ma_short = self.technical_indicators.FeatureNames.MA_SHORT
-        ma_long = self.technical_indicators.FeatureNames.MA_LONG
+        ma_short = FeatureNames.MA_SHORT
+        ma_long = FeatureNames.MA_LONG
         
         if ma_short not in current_features or ma_long not in current_features:
             logging.warning(f"Missing '{ma_short}' or '{ma_long}' in features for {symbol} at {timestamp}. Features: {list(current_features.keys())}")

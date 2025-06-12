@@ -5,54 +5,64 @@ from ta.trend import SMAIndicator, EMAIndicator, MACD
 from ta.momentum import RSIIndicator, StochasticOscillator
 from ta.volatility import BollingerBands
 from .base import FeatureEngineer
+from dataclasses import dataclass
+
+@dataclass
+class FeatureNames:
+    """Feature names used in the system."""
+    # Trend Indicators
+    SMA_20 = 'sma_20'
+    SMA_50 = 'sma_50'
+    SMA_200 = 'sma_200'
+    EMA_20 = 'ema_20'
+    EMA_50 = 'ema_50'
+    EMA_200 = 'ema_200'
+    MACD = 'macd'
+    MACD_SIGNAL = 'macd_signal'
+    MACD_HIST = 'macd_hist'
+    
+    # Momentum Indicators
+    RSI_14 = 'rsi_14'
+    STOCH_K = 'stoch_k'
+    STOCH_D = 'stoch_d'
+    
+    # Volatility Indicators
+    BB_UPPER = 'bb_upper'
+    BB_MIDDLE = 'bb_middle'
+    BB_LOWER = 'bb_lower'
+    
+    # Volume Indicators
+    VOLUME_MA_5 = 'volume_ma_5'
+    VOLUME_MA_15 = 'volume_ma_15'
+    
+    # Price Action
+    PRICE_CHANGE = 'price_change'
+    VOLUME_CHANGE = 'volume_change'
+    VOLATILITY = 'volatility'
+    PRICE_CHANGE_5MIN = 'price_change_5min'
+    PRICE_CHANGE_15MIN = 'price_change_15min'
+    PRICE_RANGE = 'price_range'
+    PRICE_RANGE_MA = 'price_range_ma'
+    VOLATILITY_5MIN = 'volatility_5min'
+    VOLATILITY_15MIN = 'volatility_15min'
+    
+    # Moving Average Crossover specific
+    MA_SHORT = 'ma_short'
+    MA_LONG = 'ma_long'
+    
+    # Additional Indicators
+    RSI = 'rsi'
+    ATR = 'atr'
+    TARGET = 'target'
 
 class TechnicalIndicators(FeatureEngineer):
     """Technical indicators feature engineering implementation."""
     
-    # Feature name constants
-    class FeatureNames:
-        # Trend Indicators
-        SMA_20 = 'sma_20'
-        SMA_50 = 'sma_50'
-        SMA_200 = 'sma_200'
-        EMA_20 = 'ema_20'
-        EMA_50 = 'ema_50'
-        EMA_200 = 'ema_200'
-        MACD = 'macd'
-        MACD_SIGNAL = 'macd_signal'
-        MACD_HIST = 'macd_hist'
-        
-        # Momentum Indicators
-        RSI_14 = 'rsi_14'
-        STOCH_K = 'stoch_k'
-        STOCH_D = 'stoch_d'
-        
-        # Volatility Indicators
-        BB_UPPER = 'bb_upper'
-        BB_MIDDLE = 'bb_middle'
-        BB_LOWER = 'bb_lower'
-        
-        # Volume Indicators
-        VOLUME_MA_5 = 'volume_ma_5'
-        VOLUME_MA_15 = 'volume_ma_15'
-        
-        # Price Action
-        PRICE_CHANGE = 'price_change'
-        VOLUME_CHANGE = 'volume_change'
-        VOLATILITY = 'volatility'
-        PRICE_CHANGE_5MIN = 'price_change_5min'
-        PRICE_CHANGE_15MIN = 'price_change_15min'
-        PRICE_RANGE = 'price_range'
-        PRICE_RANGE_MA = 'price_range_ma'
-        VOLATILITY_5MIN = 'volatility_5min'
-        VOLATILITY_15MIN = 'volatility_15min'
-        
-        # Moving Average Crossover specific
-        MA_SHORT = 'ma_short'
-        MA_LONG = 'ma_long'
+    FeatureNames = FeatureNames  # Expose FeatureNames class
     
     def __init__(self):
         """Initialize the technical indicators feature engineer."""
+        self.feature_names = self.FeatureNames()  # Use class attribute
         self._available_features = [
             # Trend Indicators
             self.FeatureNames.SMA_20,
@@ -92,7 +102,10 @@ class TechnicalIndicators(FeatureEngineer):
             
             # Moving Average Crossover specific
             self.FeatureNames.MA_SHORT,
-            self.FeatureNames.MA_LONG
+            self.FeatureNames.MA_LONG,
+            self.FeatureNames.RSI,
+            self.FeatureNames.ATR,
+            self.FeatureNames.TARGET
         ]
         
         self._feature_dependencies = {
@@ -134,7 +147,10 @@ class TechnicalIndicators(FeatureEngineer):
             
             # Moving Average Crossover specific
             self.FeatureNames.MA_SHORT: ['close'],
-            self.FeatureNames.MA_LONG: ['close']
+            self.FeatureNames.MA_LONG: ['close'],
+            self.FeatureNames.RSI: ['close'],
+            self.FeatureNames.ATR: ['high', 'low', 'close'],
+            self.FeatureNames.TARGET: ['close']
         }
         
         # Default MA windows
@@ -238,6 +254,27 @@ class TechnicalIndicators(FeatureEngineer):
         if self.FeatureNames.MA_LONG in features:
             df[self.FeatureNames.MA_LONG] = df['close'].rolling(window=self._long_window).mean()
         
+        # Calculate RSI
+        if self.FeatureNames.RSI in features:
+            delta = df[self.FeatureNames.PRICE_CHANGE].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rs = gain / loss
+            df[self.FeatureNames.RSI] = 100 - (100 / (1 + rs))
+        
+        # Calculate ATR
+        if self.FeatureNames.ATR in features:
+            high_low = df['high'] - df['low']
+            high_close = np.abs(df['high'] - df['close'].shift())
+            low_close = np.abs(df['low'] - df['close'].shift())
+            ranges = pd.concat([high_low, high_close, low_close], axis=1)
+            true_range = np.max(ranges, axis=1)
+            df[self.FeatureNames.ATR] = true_range.rolling(window=14).mean()
+        
+        # Calculate target labels
+        if self.FeatureNames.TARGET in features:
+            df[self.FeatureNames.TARGET] = self.identify_local_extrema(df)
+        
         return df
     
     def get_available_features(self) -> List[str]:
@@ -246,4 +283,34 @@ class TechnicalIndicators(FeatureEngineer):
     
     def get_feature_dependencies(self, feature: str) -> List[str]:
         """Get list of features that a given feature depends on."""
-        return self._feature_dependencies.get(feature, []) 
+        return self._feature_dependencies.get(feature, [])
+    
+    def identify_local_extrema(self, data: pd.DataFrame, window: int = 5) -> pd.Series:
+        """
+        Identify local minima and maxima in price data.
+        
+        Args:
+            data: DataFrame with 'close' prices
+            window: Window size for identifying local extrema
+            
+        Returns:
+            Series with target labels: 1 for local minima (BUY), -1 for local maxima (SELL), 0 for HOLD
+        """
+        close_prices = data['close']
+        target = pd.Series(0, index=close_prices.index)  # Initialize with HOLD (0)
+        
+        # Find local minima (BUY signals)
+        for i in range(window, len(close_prices) - window):
+            # Check if current point is a local minimum
+            if all(close_prices.iloc[i] <= close_prices.iloc[i-window:i]) and \
+               all(close_prices.iloc[i] <= close_prices.iloc[i+1:i+window+1]):
+                target.iloc[i] = 1  # BUY signal
+        
+        # Find local maxima (SELL signals)
+        for i in range(window, len(close_prices) - window):
+            # Check if current point is a local maximum
+            if all(close_prices.iloc[i] >= close_prices.iloc[i-window:i]) and \
+               all(close_prices.iloc[i] >= close_prices.iloc[i+1:i+window+1]):
+                target.iloc[i] = -1  # SELL signal
+        
+        return target 

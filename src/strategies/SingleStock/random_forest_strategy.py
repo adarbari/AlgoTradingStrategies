@@ -72,7 +72,7 @@ class RandomForestStrategy(BaseStrategy):
             end_date=end_date
         )
         
-        # Store feature columns for prediction
+        # Store feature columns for prediction (excluding target)
         self.feature_columns = [col for col in features.columns if col not in ['target', 'close']]
         
         # Train model and fit scaler if not already done
@@ -91,7 +91,7 @@ class RandomForestStrategy(BaseStrategy):
         Args:
             data (pd.DataFrame): Training data with features and target
         """
-        # Select features for training
+        # Select features for training (excluding target)
         feature_cols = [col for col in data.columns if col not in ['target', 'close']]
         X = data[feature_cols]
         y = data['target']
@@ -133,8 +133,14 @@ class RandomForestStrategy(BaseStrategy):
                 features=features
             )
         
+        # Create DataFrame with features to preserve feature names
+        feature_df = pd.DataFrame([features])
+        # Remove target if present in features
+        if 'target' in feature_df.columns:
+            feature_df = feature_df.drop('target', axis=1)
+        feature_values = feature_df[self.feature_columns]
+        
         # Scale features
-        feature_values = np.array([features[col] for col in self.feature_columns]).reshape(1, -1)
         scaled_features = self.scaler.transform(feature_values)
         
         # Get prediction probabilities

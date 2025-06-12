@@ -10,13 +10,26 @@ from src.strategies.SingleStock.random_forest_strategy import RandomForestStrate
 class StrategyFactory:
     """Factory class for creating and managing ticker-specific strategy instances."""
     
+    _instance = None
+    
+    def __new__(cls):
+        """Ensure only one instance of StrategyFactory exists."""
+        if cls._instance is None:
+            cls._instance = super(StrategyFactory, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+    
     def __init__(self):
-        """Initialize the strategy factory."""
+        """Initialize the strategy factory if not already initialized."""
+        if self._initialized:
+            return
+            
         self._strategy_instances: Dict[str, Dict[str, BaseStrategy]] = {}
         self._strategy_classes = {
             'ma': MACrossoverStrategy,
             'ml': RandomForestStrategy
         }
+        self._initialized = True
     
     def get_strategy(self, symbol: str, strategy_type: str) -> BaseStrategy:
         """Get or create a strategy instance for a specific ticker.

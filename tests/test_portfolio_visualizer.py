@@ -59,13 +59,11 @@ def sample_strategy_results():
         }
     ]
 
-@pytest.mark.slow
 def test_plot_portfolio_performance(sample_portfolio_data):
     """Test plotting portfolio performance."""
     # Test basic plotting
     plot_portfolio_performance('AAPL', sample_portfolio_data)
 
-@pytest.mark.slow
 def test_plot_trade_distribution():
     """Test plotting trade distribution."""
     # Create a mock trades DataFrame with required columns
@@ -78,13 +76,11 @@ def test_plot_trade_distribution():
     })
     plot_trade_distribution('AAPL', trades)
 
-@pytest.mark.slow
 def test_plot_backtest_results(sample_backtest_data):
     """Test plotting backtest results."""
     # Test basic plotting
     plot_backtest_results('AAPL', sample_backtest_data)
 
-@pytest.mark.slow
 def test_plot_strategy_comparison(sample_strategy_results):
     """Test plotting strategy comparison."""
     # Test basic plotting
