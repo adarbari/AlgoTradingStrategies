@@ -37,6 +37,10 @@ class FeatureStore:
         Returns:
             DataFrame with calculated features
         """
+        print(f"\nCalculating features for {symbol} from {start_date} to {end_date}")
+        print(f"Input data shape: {data.shape}")
+        print(f"Input data columns: {data.columns.tolist()}")
+        
         # Calculate features using TechnicalIndicators
         features = self.technical_indicators.calculate_features(
             data=data,
@@ -46,6 +50,9 @@ class FeatureStore:
                 self.technical_indicators.FeatureNames.MA_LONG
             ]
         )
+        
+        print(f"Calculated features shape: {features.shape}")
+        print(f"Calculated features columns: {features.columns.tolist()}")
         
         # Cache the features
         self.cache_features(symbol, start_date, end_date, features)
@@ -246,13 +253,19 @@ class FeatureStore:
             end_date: End date in YYYY-MM-DD format
             features_df: DataFrame with features to cache
         """
+        print(f"Attempting to cache features for {symbol} from {start_date} to {end_date}")
+        print(f"DataFrame shape: {features_df.shape}")
+        print(f"DataFrame columns: {features_df.columns.tolist()}")
+        
         # Don't cache empty DataFrames
         if features_df.empty:
+            print(f"Skipping cache for {symbol} - DataFrame is empty")
             return
             
         cache_path = self._get_cache_path(symbol, start_date, end_date)
+        print(f"Caching to path: {cache_path}")
         joblib.dump(features_df, cache_path)
-        print(f"Cached features to {cache_path}")
+        print(f"Successfully cached features to {cache_path}")
     
     def clear_cache(self, symbol: Optional[str] = None) -> None:
         """Clear cached features.

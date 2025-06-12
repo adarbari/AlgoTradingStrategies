@@ -1,5 +1,56 @@
 ---
-description:
-globs:
+description: 
+globs: 
 alwaysApply: false
 ---
+# Test After Code Generation Rule
+
+This rule ensures that tests are run after any code generation to maintain code quality and prevent regressions.
+
+## Rule Details
+
+After any code generation or modification:
+1. Run the test script in slow mode
+2. If tests fail, show the error message
+3. If tests pass, continue with the changes
+
+## Implementation
+
+```python
+import subprocess
+import sys
+
+def run_tests():
+    """Run tests in slow mode."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "scripts/run_tests.py"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        print("Tests passed successfully!")
+        return True
+    except subprocess.CalledProcessError as e:
+        print("Tests failed!")
+        print(e.stdout)
+        print(e.stderr)
+        return False
+
+# Run tests after code generation
+if not run_tests():
+    print("Please fix the failing tests before proceeding.")
+    sys.exit(1)
+```
+
+## Usage
+
+This rule is automatically applied after any code generation or modification. It ensures that all tests pass before proceeding with the changes.
+
+## Configuration
+
+The rule uses the following configuration:
+- Test script: `scripts/run_tests.py`
+- Test mode: Slow mode (using pytest markers)
+- Coverage reporting: Enabled
+- Verbose output: Enabled
