@@ -215,13 +215,7 @@ class TradeExecutor:
         
     def _execute_trade(self, trade: Trade, timestamp: datetime) -> bool:
         """Execute a trade through the portfolio manager"""
-        try:
-            # Validate position size before execution
-            if not self.portfolio_manager.validate_position_size(trade.symbol, trade.quantity, trade.price):
-                logger.warning("Position size validation failed for %s: quantity=%.2f, price=%.2f", 
-                             trade.symbol, trade.quantity, trade.price)
-                return False
-                
+        try:    
             if trade.action == 'BUY':
                 success = self.portfolio_manager.update_position(
                     trade.symbol,

@@ -224,7 +224,7 @@ class PortfolioManager:
         return {
             'daily_metrics': latest_daily.to_dict() if latest_daily else None,
             'cumulative_metrics': self.cumulative_metrics.to_dict() if self.cumulative_metrics else None,
-            'portfolio_value': self.get_portfolio_value({symbol: pos['current_price'] for symbol, pos in self.positions.items()}),
+            'portfolio_value': self.get_portfolio_value({symbol: pos.get('current_price', pos['avg_price']) for symbol, pos in self.positions.items()}),
             'positions': current_positions,
             'cash': self.cash
         }
