@@ -11,6 +11,7 @@ from sklearn.preprocessing import StandardScaler
 
 from src.strategies.base_strategy import BaseStrategy, StrategySignal
 from src.features.feature_store import FeatureStore
+from src.features.technical_indicators import TechnicalIndicators
 
 class RandomForestStrategy(BaseStrategy):
     """
@@ -22,6 +23,7 @@ class RandomForestStrategy(BaseStrategy):
     
     def __init__(
         self,
+        feature_store: Optional[FeatureStore] = None,
         n_estimators: int = 100,
         max_depth: int = 5,
         min_samples_split: int = 2,
@@ -32,6 +34,7 @@ class RandomForestStrategy(BaseStrategy):
         Initialize the Random Forest Strategy.
         
         Args:
+            feature_store (Optional[FeatureStore]): Feature store instance. If None, a new one will be created.
             n_estimators (int): Number of trees in the forest
             max_depth (int): Maximum depth of the trees
             min_samples_split (int): Minimum samples required to split a node
@@ -40,14 +43,68 @@ class RandomForestStrategy(BaseStrategy):
         """
         super().__init__(name="Random_Forest")
         self.cache_dir = cache_dir
-        self.feature_store = FeatureStore(cache_dir=cache_dir)
+        self.feature_store = feature_store or FeatureStore(cache_dir=cache_dir)
         self.n_estimators = n_estimators
         self.max_depth = max_depth
         self.min_samples_split = min_samples_split
         self.lookback_window = lookback_window
         self.model = None
         self.scaler = StandardScaler()
-        self.feature_columns = None
+
+        # Use FeatureNames from TechnicalIndicators
+        self.feature_columns = [
+            # Price data
+            'open',
+            'high',
+            'low',
+            'close',
+            'volume',
+            
+            # Moving Averages
+            TechnicalIndicators.FeatureNames.SMA_20,
+            TechnicalIndicators.FeatureNames.SMA_50,
+            TechnicalIndicators.FeatureNames.SMA_200,
+            TechnicalIndicators.FeatureNames.EMA_20,
+            TechnicalIndicators.FeatureNames.EMA_50,
+            TechnicalIndicators.FeatureNames.EMA_200,
+            TechnicalIndicators.FeatureNames.MA_SHORT,
+            TechnicalIndicators.FeatureNames.MA_LONG,
+            
+            # MACD
+            TechnicalIndicators.FeatureNames.MACD,
+            TechnicalIndicators.FeatureNames.MACD_SIGNAL,
+            TechnicalIndicators.FeatureNames.MACD_HIST,
+            
+            # Momentum
+            TechnicalIndicators.FeatureNames.RSI_14,
+            TechnicalIndicators.FeatureNames.RSI,
+            TechnicalIndicators.FeatureNames.STOCH_K,
+            TechnicalIndicators.FeatureNames.STOCH_D,
+            
+            # Volatility
+            TechnicalIndicators.FeatureNames.BB_UPPER,
+            TechnicalIndicators.FeatureNames.BB_MIDDLE,
+            TechnicalIndicators.FeatureNames.BB_LOWER,
+            TechnicalIndicators.FeatureNames.ATR,
+            
+            # Volume
+            TechnicalIndicators.FeatureNames.VOLUME_MA_5,
+            TechnicalIndicators.FeatureNames.VOLUME_MA_15,
+            TechnicalIndicators.FeatureNames.VOLUME_CHANGE,
+            
+            # Price Action
+            TechnicalIndicators.FeatureNames.PRICE_CHANGE,
+            TechnicalIndicators.FeatureNames.PRICE_CHANGE_5MIN,
+            TechnicalIndicators.FeatureNames.PRICE_CHANGE_15MIN,
+            TechnicalIndicators.FeatureNames.PRICE_RANGE,
+            TechnicalIndicators.FeatureNames.PRICE_RANGE_MA,
+            
+            # Volatility
+            TechnicalIndicators.FeatureNames.VOLATILITY,
+            TechnicalIndicators.FeatureNames.VOLATILITY_5MIN,
+            TechnicalIndicators.FeatureNames.VOLATILITY_15MIN
+        ]
+        self.target_columns = [TechnicalIndicators.FeatureNames.TARGET]
         
     def train_model(self, data: pd.DataFrame, symbol: str):
         """
@@ -63,13 +120,10 @@ class RandomForestStrategy(BaseStrategy):
         if self.model is None:
             features = self._get_training_features(data, symbol)
             
-            # Store feature columns for prediction (excluding target)
-            self.feature_columns = [col for col in features.columns if col not in ['target']]
-            
-            # Select features for training
+            # Select features for training (excluding target)
             X = features[self.feature_columns]
-            y = features['target']
-        
+            y = features[self.target_columns]
+            
             # Create and train model
             self.model = RandomForestClassifier(
                 n_estimators=self.n_estimators,

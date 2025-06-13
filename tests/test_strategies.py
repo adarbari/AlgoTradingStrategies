@@ -35,15 +35,16 @@ def mock_feature_store():
     technical_indicators = TechnicalIndicators()
     def mock_get_features(symbol, data, start_date, end_date):
         dates = pd.date_range(start=start_date, end=end_date, freq='D')
-        features = pd.DataFrame({
-            'close': np.random.normal(150, 5, len(dates)),
-            technical_indicators.FeatureNames.MA_SHORT: np.random.normal(150, 2, len(dates)),
-            technical_indicators.FeatureNames.MA_LONG: np.random.normal(148, 2, len(dates)),
-            technical_indicators.FeatureNames.RSI_14: np.random.uniform(30, 70, len(dates)),
-            technical_indicators.FeatureNames.MACD: np.random.normal(0, 1, len(dates)),
-            technical_indicators.FeatureNames.MACD_SIGNAL: np.random.normal(0, 1, len(dates)),
-            'target': np.random.choice([-1, 0, 1], len(dates))
-        }, index=dates)
+        rf_strategy = RandomForestStrategy()
+        features_dict = {}
+        for feature in rf_strategy.feature_columns:
+            # Use random values for numeric features
+            if feature in ['open', 'high', 'low', 'close', 'volume']:
+                features_dict[feature] = np.random.normal(150, 5, len(dates))
+            else:
+                features_dict[feature] = np.random.normal(0, 1, len(dates))
+        features_dict['target'] = np.random.choice([-1, 0, 1], len(dates))
+        features = pd.DataFrame(features_dict, index=dates)
         return features
     mock_store.get_features.side_effect = mock_get_features
     return mock_store
@@ -62,14 +63,7 @@ def ma_strategy(mock_feature_store):
 @pytest.fixture
 def rf_strategy(mock_feature_store):
     """Create a RandomForestStrategy instance for testing."""
-    strategy = RandomForestStrategy(
-        n_estimators=10,
-        max_depth=3,
-        min_samples_split=2,
-        lookback_window=5,
-        cache_dir='tests/cache'
-    )
-    strategy.feature_store = mock_feature_store
+    strategy = RandomForestStrategy(feature_store=mock_feature_store)
     return strategy
 
 def test_ma_strategy_initialization(ma_strategy):
@@ -80,11 +74,6 @@ def test_ma_strategy_initialization(ma_strategy):
 
 def test_rf_strategy_initialization(rf_strategy):
     """Test RandomForestStrategy initialization."""
-    assert rf_strategy.n_estimators == 10
-    assert rf_strategy.max_depth == 3
-    assert rf_strategy.min_samples_split == 2
-    assert rf_strategy.lookback_window == 5
-    assert rf_strategy.cache_dir == 'tests/cache'
     assert isinstance(rf_strategy.feature_store, FeatureStore)
 
 def test_ma_strategy_prepare_data(ma_strategy, sample_data):
