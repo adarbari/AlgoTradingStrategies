@@ -63,6 +63,19 @@ class StrategyFactory:
         Returns:
             List of strategy instances for the ticker
         """
+        if len(self._strategy_instances) == 0:
+            # Initialize the strategy instances
+            if symbol not in self._strategy_instances:
+                self._strategy_instances[symbol] = {}
+            # Create a new instance for each strategy type
+            for strategy_type in self._strategy_classes:
+                strategy_class = self._strategy_classes.get(strategy_type)
+                if strategy_class is None:
+                    raise ValueError(f"Unknown strategy type: {strategy_type}")
+            
+                # Create a new instance for this ticker
+                self._strategy_instances[symbol][strategy_type] = strategy_class()
+
         if symbol not in self._strategy_instances:
             return []
         return list(self._strategy_instances[symbol].values())
