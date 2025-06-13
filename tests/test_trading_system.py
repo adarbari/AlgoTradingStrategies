@@ -14,6 +14,18 @@ class TestTradingSystem(unittest.TestCase):
         self.end_date = datetime(2023, 12, 31)
         self.initial_budget = 10000.0
         
+        # Mock data for AAPL and MSFT
+        self.mock_data = {
+            'AAPL': pd.DataFrame({
+                'close': np.random.rand(365),
+                'volume': np.random.rand(365)
+            }, index=pd.date_range(start=self.start_date, end=self.end_date, freq='D')),
+            'MSFT': pd.DataFrame({
+                'close': np.random.rand(365),
+                'volume': np.random.rand(365)
+            }, index=pd.date_range(start=self.start_date, end=self.end_date, freq='D'))
+        }
+        
     def test_initialization(self):
         """Test TradingSystem initialization with different split ratios."""
         # Test default split ratios
@@ -69,6 +81,10 @@ class TestTradingSystem(unittest.TestCase):
             start_date=self.start_date,
             end_date=self.end_date
         )
+        
+        # Mock the historical data and features
+        system.historical_data = self.mock_data
+        system.features = self.mock_data
         
         # Get data for each split
         train_data = system.get_data_for_split('train')

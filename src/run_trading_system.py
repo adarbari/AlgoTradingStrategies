@@ -139,7 +139,8 @@ class TradingSystem:
             raise ValueError(f"Invalid split name: {split_name}")
         
         for symbol, features in self.features.items():
-            mask = (features.index >= split_start) & (features.index <= split_end)
+            # Use >= for start date and < for end date to prevent overlap
+            mask = (features.index >= split_start) & (features.index < split_end)
             split_data[symbol] = features[mask]
             
         return split_data
@@ -213,14 +214,17 @@ class TradingSystem:
             # Update trade executor with current state
             self.trade_executor.update_prices(current_prices)
             self.trade_executor.update_features(current_features)
+            
             # Process signals and execute trades
             executed_trades = self.trade_executor.process(timestamp)
+           
             # Log executed trades
             for trade in executed_trades:
                 logger.info(
                     f"Executed {trade.action} for {trade.symbol}: "
                     f"{trade.quantity} shares at ${trade.price:.2f}"
                 )
+            
             # Log portfolio value
             portfolio_value = self.portfolio_manager.get_portfolio_value()
             logger.info(f"Current portfolio value: ${portfolio_value:.2f}")
