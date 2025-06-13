@@ -14,6 +14,7 @@ from src.features.technical_indicators import TechnicalIndicators
 class TestFeatureStore(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
+        FeatureStore.reset_instance()
         self.cache_dir = 'test_cache'
         self.feature_store = FeatureStore(cache_dir=self.cache_dir)
         self.technical_indicators = TechnicalIndicators()

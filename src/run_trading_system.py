@@ -57,7 +57,7 @@ class TradingSystem:
         self.data_cache = DataCache()
         self.data_fetcher = PolygonProvider(cache=self.data_cache)
         # Initialize feature store
-        self.feature_store = FeatureStore()
+        self.feature_store = FeatureStore.get_instance()
         
         # Phase-specific components will be initialized in run()
         self.portfolio_manager = None

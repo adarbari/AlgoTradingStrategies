@@ -24,76 +24,23 @@ class RandomForestStrategy(BaseStrategy):
     
     def __init__(
         self,
-        config: Optional[RandomForestConfig] = None,
-        feature_store: Optional[FeatureStore] = None,
+        config: Optional[RandomForestConfig] = None
     ):
         """
         Initialize the Random Forest Strategy.
         
         Args:
             config (Optional[RandomForestConfig]): Strategy configuration. If None, default config will be used.
-            feature_store (Optional[FeatureStore]): Feature store instance. If None, a new one will be created.
-        """
+       """
         super().__init__(name="Random_Forest")
         self.config = config or RandomForestConfig()
-        self.feature_store = feature_store or FeatureStore(cache_dir=self.config.cache_dir)
+        self.feature_store = FeatureStore.get_instance()
         self.model = None
         self.scaler = StandardScaler()
 
         # Use FeatureNames from TechnicalIndicators
-        self.feature_columns = [
-            # Price data
-            'open',
-            'high',
-            'low',
-            'close',
-            'volume',
-            
-            # Moving Averages
-            TechnicalIndicators.FeatureNames.SMA_20,
-            TechnicalIndicators.FeatureNames.SMA_50,
-            TechnicalIndicators.FeatureNames.SMA_200,
-            TechnicalIndicators.FeatureNames.EMA_20,
-            TechnicalIndicators.FeatureNames.EMA_50,
-            TechnicalIndicators.FeatureNames.EMA_200,
-            TechnicalIndicators.FeatureNames.MA_SHORT,
-            TechnicalIndicators.FeatureNames.MA_LONG,
-            
-            # MACD
-            TechnicalIndicators.FeatureNames.MACD,
-            TechnicalIndicators.FeatureNames.MACD_SIGNAL,
-            TechnicalIndicators.FeatureNames.MACD_HIST,
-            
-            # Momentum
-            TechnicalIndicators.FeatureNames.RSI_14,
-            TechnicalIndicators.FeatureNames.RSI,
-            TechnicalIndicators.FeatureNames.STOCH_K,
-            TechnicalIndicators.FeatureNames.STOCH_D,
-            
-            # Volatility
-            TechnicalIndicators.FeatureNames.BB_UPPER,
-            TechnicalIndicators.FeatureNames.BB_MIDDLE,
-            TechnicalIndicators.FeatureNames.BB_LOWER,
-            TechnicalIndicators.FeatureNames.ATR,
-            
-            # Volume
-            TechnicalIndicators.FeatureNames.VOLUME_MA_5,
-            TechnicalIndicators.FeatureNames.VOLUME_MA_15,
-            TechnicalIndicators.FeatureNames.VOLUME_CHANGE,
-            
-            # Price Action
-            TechnicalIndicators.FeatureNames.PRICE_CHANGE,
-            TechnicalIndicators.FeatureNames.PRICE_CHANGE_5MIN,
-            TechnicalIndicators.FeatureNames.PRICE_CHANGE_15MIN,
-            TechnicalIndicators.FeatureNames.PRICE_RANGE,
-            TechnicalIndicators.FeatureNames.PRICE_RANGE_MA,
-            
-            # Volatility
-            TechnicalIndicators.FeatureNames.VOLATILITY,
-            TechnicalIndicators.FeatureNames.VOLATILITY_5MIN,
-            TechnicalIndicators.FeatureNames.VOLATILITY_15MIN
-        ]
-        self.target_columns = [TechnicalIndicators.FeatureNames.TARGET]
+        self.feature_columns = self.config.feature_columns
+        self.target_columns = self.config.target_columns 
         
     def train_model(self, data: pd.DataFrame, symbol: str):
         """
@@ -107,7 +54,8 @@ class RandomForestStrategy(BaseStrategy):
             pd.DataFrame: Data with features
         """
         if self.model is None:
-            features = self._get_training_features(data, symbol)
+            # Get all features for the associated symbol
+            features = self._get_all_features(data, symbol)
             
             # Select features for training (excluding target)
             X = features[self.feature_columns]
@@ -118,13 +66,13 @@ class RandomForestStrategy(BaseStrategy):
                 n_estimators=self.config.n_estimators,
                 max_depth=self.config.max_depth,
                 min_samples_split=self.config.min_samples_split,
-                random_state=42)
+                random_state=self.config.random_state)
         
             # Fit scaler and transform features
             X_scaled = self.scaler.fit_transform(X)
             self.model.fit(X_scaled, y)
     
-    def _get_training_features(self, data: pd.DataFrame, symbol: str) -> pd.DataFrame:
+    def _get_all_features(self, data: pd.DataFrame, symbol: str) -> pd.DataFrame:
         """
         Get training features for the strategy.
         
@@ -241,7 +189,10 @@ class RandomForestStrategy(BaseStrategy):
             'n_estimators': self.config.n_estimators,
             'max_depth': self.config.max_depth,
             'min_samples_split': self.config.min_samples_split,
-            'lookback_window': self.config.lookback_window
+            'lookback_window': self.config.lookback_window,
+            'random_state': self.config.random_state,
+            'feature_columns': self.config.feature_columns,
+            'target_columns': self.config.target_columns
         }
     
     def set_parameters(self, parameters: Dict[str, Any]) -> None:

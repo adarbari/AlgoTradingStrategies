@@ -38,7 +38,7 @@ class MACrossoverStrategy(BaseStrategy):
         """
         super().__init__(name="MA_Crossover")
         self.config = config or MACrossoverConfig()
-        self.feature_store = FeatureStore(cache_dir=self.config.cache_dir)
+        self.feature_store = FeatureStore.get_instance()
         self._prev_features = None  # Store previous features for crossover detection
         self.technical_indicators = TechnicalIndicators()
 

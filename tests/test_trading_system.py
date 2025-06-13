@@ -3,10 +3,12 @@ from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
 from src.run_trading_system import TradingSystem
+from src.features.feature_store import FeatureStore
 
 class TestTradingSystem(unittest.TestCase):
     def setUp(self):
         """Set up test cases."""
+        FeatureStore.reset_instance()
         self.symbols = ['AAPL', 'MSFT']
         self.start_date = datetime(2023, 1, 1)
         self.end_date = datetime(2023, 12, 31)

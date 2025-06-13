@@ -5,19 +5,47 @@ import joblib
 from datetime import datetime
 import glob
 from .technical_indicators import TechnicalIndicators
+import sys
+import inspect
 
 class FeatureStore:
     """Manages caching of calculated features with support for partial date ranges."""
     
-    def __init__(self, cache_dir: str = 'feature_cache'):
+    _instance = None
+    _initialized = False
+    _cache_dir = 'feature_cache'
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(FeatureStore, cls).__new__(cls)
+            # Create cache directory when instance is first created
+            os.makedirs(cls._cache_dir, exist_ok=True)
+        return cls._instance
+    
+    def __init__(self):
         """Initialize the feature store.
         
         Args:
             cache_dir: Directory to store cached features
         """
-        self.cache_dir = cache_dir
-        os.makedirs(cache_dir, exist_ok=True)
-        self.technical_indicators = TechnicalIndicators()
+        if not self._initialized:
+            self.cache_dir = self._cache_dir
+            self.technical_indicators = TechnicalIndicators()
+            self._initialized = True
+    
+    @classmethod
+    def get_instance(cls) -> 'FeatureStore':
+        """Get the singleton instance of FeatureStore.
+        
+        Args:
+            cache_dir: Directory to store cached features (only used on first initialization)
+            
+        Returns:
+            FeatureStore instance
+        """
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
     
     def calculate_and_cache_features(
         self,
@@ -344,4 +372,21 @@ class FeatureStore:
         else:
             if 'target' in data.columns and 'target' not in features_df.columns:
                 features_df['target'] = data['target']
-        return features_df 
+        return features_df
+
+    @classmethod
+    def reset_instance(cls):
+        """Reset the singleton instance. Only allowed in test environments."""
+        # Check if called from a test context
+        stack = inspect.stack()
+        for frame in stack:
+            # Check for pytest or unittest in the call stack
+            if (
+                'pytest' in frame.filename or
+                'unittest' in frame.filename or
+                'test' in frame.filename.lower()
+            ):
+                cls._instance = None
+                cls._initialized = False
+                return
+        raise RuntimeError("reset_instance() can only be called from a test context (pytest/unittest). Do not use in production code.") 
