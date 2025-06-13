@@ -66,7 +66,9 @@ def ma_strategy(mock_feature_store):
 def rf_strategy(mock_feature_store):
     """Create a RandomForestStrategy instance for testing."""
     config = RandomForestConfig(cache_dir='tests/cache')
-    strategy = RandomForestStrategy(config=config, feature_store=mock_feature_store)
+    strategy = RandomForestStrategy(config=config)
+    # Set the mock feature store after initialization
+    strategy.feature_store = mock_feature_store
     return strategy
 
 def test_ma_strategy_initialization(ma_strategy):

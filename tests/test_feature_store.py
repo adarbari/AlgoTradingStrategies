@@ -12,11 +12,23 @@ from src.features.feature_store import FeatureStore
 from src.features.technical_indicators import TechnicalIndicators
 
 class TestFeatureStore(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        """Set up test class fixtures."""
+        # Reset the FeatureStore singleton before all tests
+        FeatureStore.reset_instance()
+    
     def setUp(self):
         """Set up test fixtures."""
-        FeatureStore.reset_instance()
+        # Clean up any existing cache directory
         self.cache_dir = 'test_cache'
-        self.feature_store = FeatureStore(cache_dir=self.cache_dir)
+        if os.path.exists(self.cache_dir):
+            shutil.rmtree(self.cache_dir)
+        
+        # Reset the FeatureStore singleton and set cache directory
+        FeatureStore.reset_instance()
+        FeatureStore._cache_dir = self.cache_dir
+        self.feature_store = FeatureStore.get_instance()
         self.technical_indicators = TechnicalIndicators()
         
         # Create sample features DataFrame with at least 100 days
@@ -145,12 +157,13 @@ class TestFeatureStore(unittest.TestCase):
             self.technical_indicators.FeatureNames.RSI_14,
             self.technical_indicators.FeatureNames.MACD
         })
-        self.assertTrue(retrieved_features.equals(
+        pd.testing.assert_frame_equal(
+            retrieved_features,
             self.sample_features[[
                 self.technical_indicators.FeatureNames.RSI_14,
                 self.technical_indicators.FeatureNames.MACD
             ]]
-        ))
+        )
     
     def test_empty_dataframe_handling(self):
         """Test handling of empty DataFrames."""
@@ -199,15 +212,23 @@ class TestFeatureStore(unittest.TestCase):
         self.feature_store.clear_cache()
         
         # Verify all cache is cleared
+        aapl_files = self.feature_store._get_cache_files('AAPL')
         msft_files = self.feature_store._get_cache_files('MSFT')
+        
+        self.assertEqual(len(aapl_files), 0)
         self.assertEqual(len(msft_files), 0)
     
     def test_overlapping_cache_files(self):
         """Test handling of overlapping cache files."""
-        # Create overlapping cache files
-        first_file = self.sample_features[:60]
-        second_file = self.sample_features[40:]
+        # Create overlapping cache files with consistent date ranges
+        first_file = self.sample_features[:60].copy()
+        second_file = self.sample_features[40:].copy()
         
+        # Ensure both DataFrames have the same frequency
+        first_file.index.freq = 'D'
+        second_file.index.freq = 'D'
+        
+        # Cache the first file
         self.feature_store.cache_features(
             symbol='AAPL',
             start_date='2024-01-01',
@@ -215,6 +236,7 @@ class TestFeatureStore(unittest.TestCase):
             features_df=first_file
         )
         
+        # Cache the second file
         self.feature_store.cache_features(
             symbol='AAPL',
             start_date='2024-02-10',
@@ -232,7 +254,13 @@ class TestFeatureStore(unittest.TestCase):
         self.assertIsNotNone(retrieved_features)
         # Should use the first file's data for the overlapping period
         expected_features = first_file['2024-02-10':'2024-02-29']
-        self.assertTrue(retrieved_features.equals(expected_features))
+        
+        # Compare the DataFrames
+        pd.testing.assert_frame_equal(
+            retrieved_features,
+            expected_features,
+            check_freq=False  # Don't check frequency as it may be lost during caching
+        )
     
     def test_invalid_date_format(self):
         """Test handling of invalid date formats."""
@@ -240,18 +268,17 @@ class TestFeatureStore(unittest.TestCase):
             self.feature_store.get_cached_features(
                 symbol='AAPL',
                 start_date='invalid-date',
-                end_date='2024-04-10'
+                end_date='2024-01-10'
             )
     
     def test_nonexistent_symbol(self):
-        """Test retrieving features for a nonexistent symbol."""
-        retrieved_features = self.feature_store.get_cached_features(
+        """Test handling of nonexistent symbols."""
+        result = self.feature_store.get_cached_features(
             symbol='NONEXISTENT',
             start_date='2024-01-01',
-            end_date='2024-04-10'
+            end_date='2024-01-10'
         )
-        
-        self.assertIsNone(retrieved_features)
+        self.assertIsNone(result)
 
 if __name__ == '__main__':
     unittest.main() 
