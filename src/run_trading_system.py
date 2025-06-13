@@ -19,6 +19,7 @@ from src.execution.portfolio_manager import PortfolioManager
 from src.execution.trade_executor import TradeExecutor
 from src.helpers.logger import TradingLogger
 from src.utils.split_manager import SplitManager
+from src.execution.metrics.cumulative_metrics import CumulativeMetrics
 
 # Initialize the trading logger first
 trading_logger = TradingLogger()
@@ -225,8 +226,9 @@ class TradingSystem:
                     f"{trade.quantity} shares at ${trade.price:.2f}"
                 )
             
-            # Log portfolio value
-            portfolio_value = self.portfolio_manager.get_portfolio_value()
+            # Get current metrics and log portfolio value
+            current_metrics = self.portfolio_manager.get_current_metrics()
+            portfolio_value = current_metrics['portfolio_value']
             logger.info(f"Current portfolio value: ${portfolio_value:.2f}")
             
         # Generate performance reports for each symbol
@@ -242,11 +244,33 @@ class TradingSystem:
         
     def get_results(self) -> Dict:
         """Get trading results for the current phase."""
+        # Get the last timestamp from historical data
+        timestamps = [
+            max(data.index) for data in self.historical_data.values()
+            if not data.empty
+        ]
+        if not timestamps:
+            default_metrics = CumulativeMetrics.create_default(self.portfolio_manager.initial_capital)
+            return {
+                'daily_metrics': [],
+                'cumulative_metrics': default_metrics.to_dict(),
+                'trades': [],
+                'positions': {}
+            }
+        # Get daily metrics as list of dicts
+        daily_metrics = [m.to_dict() for m in self.portfolio_manager.daily_metrics]
+        # Get cumulative metrics as dict
+        cumulative_metrics = self.portfolio_manager.get_cumulative_metrics()
+        cumulative_metrics_dict = cumulative_metrics.to_dict() if cumulative_metrics else {}
+        # Get trades as list of dicts
+        trades = self.portfolio_manager.trades if hasattr(self.portfolio_manager, 'trades') else []
+        # Get positions as dict
+        positions = self.portfolio_manager.positions if hasattr(self.portfolio_manager, 'positions') else {}
         return {
-            'final_value': self.portfolio_manager.get_portfolio_value(),
-            'return_pct': (self.portfolio_manager.get_portfolio_value() / self.initial_budget - 1) * 100,
-            'num_trades': len(self.portfolio_manager.positions),
-            'positions': self.portfolio_manager.positions
+            'daily_metrics': daily_metrics,
+            'cumulative_metrics': cumulative_metrics_dict,
+            'trades': trades,
+            'positions': positions
         }
 
 def main():
@@ -271,17 +295,28 @@ def main():
         logger.info("\nRunning test phase...")
         test_results = trading_system.run('test')
         
-        # Print results
-        logger.info("\nTrading Results:")
-        logger.info(f"Final Portfolio Value: ${test_results['final_value']:.2f}")
-        logger.info(f"Return: {test_results['return_pct']:.2f}%")
-        logger.info(f"Number of Trades: {test_results['num_trades']}")
-        
-        # Print current positions
-        logger.info("\nCurrent Positions:")
-        for symbol, position in test_results['positions'].items():
-            logger.info(f"{symbol}: {position['quantity']} shares at ${position['avg_price']:.2f}")
+        # Print results for each stage
+        for phase_name, results in zip([
+            'Training Results', 'Validation Results', 'Test Results'],
+            [training_results, validation_results, test_results]
+        ):
+            logger.info(f"\n{phase_name}:")
+            # Print cumulative metrics
+            logger.info("Cumulative Metrics:")
+            for key, value in results['cumulative_metrics'].items():
+                logger.info(f"  {key}: {value}")
             
+            # Print number of trades
+            logger.info(f"Number of Trades: {len(results['trades'])}")
+            
+            # Optionally print daily metrics summary
+            logger.info(f"Number of Daily Metrics: {len(results['daily_metrics'])}")
+            
+            # Print current positions
+            logger.info("\nCurrent Positions:")
+            for symbol, position in results.get('positions', {}).items():
+                logger.info(f"{symbol}: {position['quantity']} shares at ${position['avg_price']:.2f}")
+                
     except Exception as e:
         logger.error(f"Error running trading system: {str(e)}")
         raise

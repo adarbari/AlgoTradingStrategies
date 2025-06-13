@@ -12,29 +12,26 @@ from src.execution.portfolio_manager import PortfolioManager
 @pytest.fixture
 def portfolio_manager():
     """Create a PortfolioManager instance for testing."""
-    return PortfolioManager(initial_budget=10000.0)
+    return PortfolioManager(initial_capital=10000.0)
 
 def test_initialization(portfolio_manager):
     """Test PortfolioManager initialization."""
-    assert portfolio_manager.initial_budget == 10000.0
+    assert portfolio_manager.initial_capital == 10000.0
     assert portfolio_manager.cash == 10000.0
     assert portfolio_manager.positions == {}
-    assert portfolio_manager.trade_history == []
+    assert portfolio_manager.trades == []
+    assert portfolio_manager.daily_metrics == []
+    assert portfolio_manager.cumulative_metrics is None
 
 def test_get_portfolio_value(portfolio_manager):
     """Test portfolio value calculation."""
-    # Initial value should equal initial budget
-    assert portfolio_manager.get_portfolio_value() == 10000.0
-    
-    # Add a position
-    portfolio_manager.positions['AAPL'] = {
-        'quantity': 10,
-        'avg_price': 150.0
-    }
-    
-    # Value should include position
-    expected_value = 10000.0 + (10 * 150.0)
-    assert portfolio_manager.get_portfolio_value() == expected_value
+    # Initial value should equal initial capital
+    current_prices = {}
+    assert portfolio_manager.get_portfolio_value(current_prices) == 10000.0
+    # After buying
+    portfolio_manager.update_position('AAPL', 5, 150.0, datetime.now())
+    current_prices = {'AAPL': 155.0}
+    assert portfolio_manager.get_portfolio_value(current_prices) == 10000.0 - (5 * 150.0) + (5 * 155.0)
 
 def test_execute_buy(portfolio_manager):
     """Test buy order execution."""
@@ -120,7 +117,8 @@ def test_get_portfolio_summary(portfolio_manager):
         timestamp=timestamp
     )
     
-    summary = portfolio_manager.get_portfolio_summary()
+    current_prices = {'AAPL': 155.0, 'MSFT': 210.0}
+    summary = portfolio_manager.get_portfolio_summary(current_prices)
     
     assert 'cash' in summary
     assert 'positions_value' in summary
@@ -129,7 +127,7 @@ def test_get_portfolio_summary(portfolio_manager):
     assert 'num_positions' in summary
     assert 'positions' in summary
     
-    expected_positions_value = (5 * 150.0) + (3 * 200.0)
+    expected_positions_value = (5 * 155.0) + (3 * 210.0)
     assert summary['positions_value'] == expected_positions_value
     assert summary['num_positions'] == 2
 
@@ -152,7 +150,7 @@ def test_get_trade_history(portfolio_manager):
         timestamp=timestamp
     )
     
-    history = portfolio_manager.get_trade_history()
+    history = portfolio_manager.trade_history
     
     assert isinstance(history, pd.DataFrame)
     assert len(history) == 2

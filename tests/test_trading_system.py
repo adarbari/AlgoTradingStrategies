@@ -122,18 +122,23 @@ class TestTradingSystem(unittest.TestCase):
         for split_name in ['train', 'val', 'test']:
             system.run(split_name)
             results = system.get_results()
-            
-            # Verify results exist
-            self.assertIn('final_value', results)
-            self.assertIn('return_pct', results)
-            self.assertIn('num_trades', results)
-            self.assertIn('positions', results)
-            
-            # Verify portfolio value is non-negative
-            self.assertGreaterEqual(results['final_value'], 0)
-            
-            # Verify we have some trading activity
-            self.assertGreaterEqual(results['num_trades'], 0)
+            # Verify results exist in cumulative_metrics
+            cm = results['cumulative_metrics']
+            self.assertIn('initial_capital', cm)
+            self.assertIn('final_capital', cm)
+            self.assertIn('total_return', cm)
+            self.assertIn('annualized_return', cm)
+            self.assertIn('total_trades', cm)
+            self.assertIn('winning_trades', cm)
+            self.assertIn('losing_trades', cm)
+            # Verify result types
+            self.assertIsInstance(cm['initial_capital'], float)
+            self.assertIsInstance(cm['final_capital'], float)
+            self.assertIsInstance(cm['total_return'], float)
+            self.assertIsInstance(cm['annualized_return'], float)
+            self.assertIsInstance(cm['total_trades'], int)
+            self.assertIsInstance(cm['winning_trades'], int)
+            self.assertIsInstance(cm['losing_trades'], int)
             
     def test_minimum_training_period(self):
         """Test that minimum training period is enforced."""

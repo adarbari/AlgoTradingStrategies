@@ -46,10 +46,8 @@ class TradeExecutor:
     def _initialize_strategies(self):
         """Initialize strategies for each symbol."""
         for symbol in self.symbols:
-            # Get both MA and ML strategies for each symbol
-            ma_strategy = self.strategy_factory.get_strategy(symbol, 'ma')
-            ml_strategy = self.strategy_factory.get_strategy(symbol, 'ml')
-            self.strategies[symbol] = [ma_strategy, ml_strategy]
+            # Get all strategies for each symbol
+            self.strategies[symbol] = self.strategy_factory.get_all_strategies(symbol)
         logger.info("Initialized strategies for %d symbols", len(self.symbols))
 
     def train_strategies(self, training_data: Dict[str, pd.DataFrame]):
@@ -159,9 +157,12 @@ class TradeExecutor:
                               trade.action, trade.symbol, trade.quantity, trade.price)
             except Exception as e:
                 logger.error("Error executing trade for %s: %s", trade.symbol, str(e))
-                continue
-                
+                continue        
         logger.info("Successfully executed %d trades", len(executed_trades))
+
+        # Update metrics after all trades are processed
+        self.portfolio_manager.update_metrics(timestamp)
+       
         return executed_trades
         
     def _aggregate_signals(self, signals: List[StrategySignal]) -> Dict[str, float]:

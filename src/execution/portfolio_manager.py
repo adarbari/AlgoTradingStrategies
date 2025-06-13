@@ -1,174 +1,234 @@
 """
-Portfolio management module for tracking positions, cash, and overall portfolio state.
+Enhanced portfolio manager with comprehensive metrics tracking.
 """
 
 from typing import Dict, List, Optional
 from datetime import datetime
 import pandas as pd
-import numpy as np
+from .metrics.daily_metrics import DailyMetrics
+from .metrics.cumulative_metrics import CumulativeMetrics
+from .metrics.metrics_calculator import MetricsCalculator
 
 class PortfolioManager:
-    """Manages portfolio state, positions, and budget."""
+    """Manages portfolio positions and tracks performance metrics."""
     
-    def __init__(self, initial_budget: float = 10000.0):
-        """Initialize portfolio manager.
+    def __init__(self, initial_capital: float = None, initial_budget: float = None):
+        """Initialize the portfolio manager."""
+        if initial_capital is not None:
+            self.initial_capital = initial_capital
+        elif initial_budget is not None:
+            self.initial_capital = initial_budget
+        else:
+            self.initial_capital = 100000.0
+        self.cash = self.initial_capital
+        self.positions = {}
+        self.trades = []
+        self.daily_metrics = []
+        self.cumulative_metrics = None
+        self.metrics_calculator = MetricsCalculator(0.02)
         
-        Args:
-            initial_budget: Initial cash available for trading
-        """
-        self.initial_budget = initial_budget
-        self.cash = initial_budget
-        self.positions: Dict[str, Dict] = {}  # {symbol: {'quantity': int, 'avg_price': float}}
-        self.trade_history: List[Dict] = []
-        self.current_prices: Dict[str, float] = {}  # Store current market prices
-        
-    def update_prices(self, prices: Dict[str, float]):
-        """Update current market prices for portfolio value calculation."""
-        self.current_prices = prices
-        
-    def get_portfolio_value(self) -> float:
-        """Get current total portfolio value (cash + positions at current market prices)."""
-        positions_value = 0.0
-        for symbol, position in self.positions.items():
-            if symbol in self.current_prices:
-                current_price = self.current_prices[symbol]
-                positions_value += position['quantity'] * current_price
-            else:
-                # Fallback to average price if current price not available
-                positions_value += position['quantity'] * position['avg_price']
+    @property
+    def trade_history(self) -> pd.DataFrame:
+        """Return trade history as a DataFrame."""
+        if not self.trades:
+            return pd.DataFrame(columns=['timestamp', 'symbol', 'action', 'quantity', 'price', 'total'])
+            
+        df = pd.DataFrame(self.trades)
+        df['action'] = df['quantity'].apply(lambda x: 'BUY' if x > 0 else 'SELL')
+        df['total'] = df['quantity'] * df['price']
+        return df[['timestamp', 'symbol', 'action', 'quantity', 'price', 'total']]
+
+    def get_portfolio_value(self, current_prices: Dict[str, float]) -> float:
+        """Calculate the total portfolio value."""
+        positions_value = sum(
+            self.positions[symbol]['quantity'] * current_prices[symbol]
+            for symbol in self.positions
+        )
         return self.cash + positions_value
-    
-    def get_position(self, symbol: str) -> Optional[Dict]:
-        """Get current position for a symbol."""
-        return self.positions.get(symbol)
-    
-    def get_all_positions(self) -> Dict[str, Dict]:
-        """Get all current positions."""
-        return self.positions
-    
-    def validate_position_size(self, symbol: str, quantity: int, price: float) -> bool:
-        """Validate if a position size is acceptable.
-        
-        Args:
-            symbol: Stock symbol
-            quantity: Number of shares
-            price: Price per share
-            
-        Returns:
-            bool: True if position size is valid
-        """
-        # Check if we have enough cash
-        if not self.can_buy(symbol, quantity, price):
-            return False
-            
-        # Check if position size is within limits
-        position_value = quantity * price
-        portfolio_value = self.get_portfolio_value()
-        
-        return position_value <= portfolio_value
-    
-    def can_buy(self, symbol: str, quantity: int, price: float) -> bool:
-        """Check if we can buy the specified quantity at the given price."""
-        required_cash = quantity * price
-        return self.cash >= required_cash
-    
-    def can_sell(self, symbol: str, quantity: int) -> bool:
-        """Check if we can sell the specified quantity."""
-        position = self.positions.get(symbol)
-        if position is None:
-            return False
-            
-        # Allow partial sells
-        return position['quantity'] >= abs(quantity)
-    
-    def update_position(self, symbol: str, quantity: int, price: float, timestamp: datetime) -> bool:
-        """Update position after a trade is executed.
-        
-        Args:
-            symbol: Stock symbol
-            quantity: Number of shares (positive for buy, negative for sell)
-            price: Price per share
-            timestamp: Trade timestamp
-            
-        Returns:
-            bool: True if position was updated successfully
-        """
-        if quantity > 0:  # Buy
-            if not self.can_buy(symbol, quantity, price):
-                return False
-                
-            if not self.validate_position_size(symbol, quantity, price):
-                return False
-                
-            cost = quantity * price
-            self.cash -= cost
-            
-            if symbol in self.positions:
-                # Update existing position
-                current_pos = self.positions[symbol]
-                total_quantity = current_pos['quantity'] + quantity
-                total_cost = (current_pos['quantity'] * current_pos['avg_price']) + cost
-                self.positions[symbol] = {
-                    'quantity': total_quantity,
-                    'avg_price': total_cost / total_quantity
-                }
-            else:
-                # Create new position
-                self.positions[symbol] = {
-                    'quantity': quantity,
-                    'avg_price': price
-                }
-                
-        else:  # Sell
-            if not self.can_sell(symbol, quantity):
-                return False
-                
-            position = self.positions[symbol]
-            proceeds = abs(quantity) * price
-            self.cash += proceeds
-            
-            # Update position
-            new_quantity = position['quantity'] - abs(quantity)
-            if new_quantity == 0:
-                del self.positions[symbol]
-            else:
-                self.positions[symbol]['quantity'] = new_quantity
-        
-        # Record trade
-        trade_record = {
-            'timestamp': timestamp,
-            'symbol': symbol,
-            'action': 'BUY' if quantity > 0 else 'SELL',
-            'quantity': abs(quantity),
-            'price': price,
-            'total': abs(quantity) * price
-        }
-        self.trade_history.append(trade_record)
-        
-        return True
-    
-    def get_portfolio_summary(self) -> Dict:
-        """Get current portfolio summary."""
-        positions_value = 0.0
-        for symbol, position in self.positions.items():
-            if symbol in self.current_prices:
-                current_price = self.current_prices[symbol]
-                positions_value += position['quantity'] * current_price
-            else:
-                # Fallback to average price if current price not available
-                positions_value += position['quantity'] * position['avg_price']
-                
+
+    def get_portfolio_summary(self, current_prices: Dict[str, float]) -> Dict:
+        """Get a summary of the portfolio state."""
+        positions_value = sum(
+            self.positions[symbol]['quantity'] * current_prices[symbol]
+            for symbol in self.positions
+        )
         total_value = self.cash + positions_value
-        
+        return_pct = (total_value - self.initial_capital) / self.initial_capital
         return {
             'cash': self.cash,
+            'positions': self.positions,
             'positions_value': positions_value,
             'total_value': total_value,
-            'return_pct': ((total_value - self.initial_budget) / self.initial_budget) * 100,
+            'return_pct': return_pct,
             'num_positions': len(self.positions),
-            'positions': self.positions
+            'total_trades': len(self.trades),
+            'open_trades': sum(1 for trade in self.trades if not trade['is_closed']),
+            'closed_trades': sum(1 for trade in self.trades if trade['is_closed'])
         }
-    
+
+    def update_position(self, symbol: str, quantity: int, price: float, timestamp: datetime) -> bool:
+        """Update a position in the portfolio."""
+        if quantity > 0:  # Buying
+            cost = quantity * price
+            if self.cash < cost:
+                return False  # Not enough cash
+            self.cash -= cost
+            if symbol in self.positions:
+                pos = self.positions[symbol]
+                total_quantity = pos['quantity'] + quantity
+                pos['avg_price'] = (pos['quantity'] * pos['avg_price'] + quantity * price) / total_quantity
+                pos['quantity'] = total_quantity
+            else:
+                self.positions[symbol] = {'quantity': quantity, 'avg_price': price}
+        else:  # Selling
+            if symbol not in self.positions or self.positions[symbol]['quantity'] < abs(quantity):
+                return False  # Not enough shares to sell
+            self.cash += abs(quantity) * price
+            self.positions[symbol]['quantity'] += quantity  # quantity is negative
+            if self.positions[symbol]['quantity'] == 0:
+                del self.positions[symbol]
+        # Record trade
+        self.trades.append({
+            'symbol': symbol,
+            'quantity': quantity,
+            'price': price,
+            'timestamp': timestamp,
+            'is_closed': False,
+            'pnl': 0.0
+        })
+        return True
+        
+    def close_position(self, symbol: str, price: float, timestamp: datetime) -> None:
+        """Close a position and record the trade."""
+        if symbol not in self.positions:
+            return
+        position = self.positions[symbol]
+        quantity = position['quantity']
+        avg_price = position['avg_price']
+        # Calculate P&L
+        pnl = quantity * (price - avg_price)
+        self.cash += quantity * price
+        # Mark trade as closed
+        for trade in self.trades:
+            if trade['symbol'] == symbol and not trade['is_closed']:
+                trade['is_closed'] = True
+                trade['pnl'] = pnl
+                break
+        # Remove position
+        del self.positions[symbol]
+        
+    def update_prices(self, current_prices: Dict[str, float]) -> None:
+        """Update current prices for positions without recalculating metrics.
+        
+        This method should be called at each timestamp to update position values.
+        Metrics should be updated separately using update_metrics().
+        
+        Args:
+            current_prices: Dictionary of current prices by symbol
+        """
+        # Update position values (market value) without changing average prices
+        for symbol, position in self.positions.items():
+            if symbol in current_prices:
+                position['current_price'] = current_prices[symbol]
+                position['market_value'] = position['quantity'] * current_prices[symbol]
+                
+    def update_metrics(self, timestamp: datetime) -> None:
+        """Update portfolio metrics for the current timestamp.
+        
+        This method should be called after trades are processed for a timestamp
+        to update daily and cumulative metrics.
+        
+        Args:
+            timestamp: Current timestamp
+        """
+        # Get current prices from positions
+        current_prices = {
+            symbol: position.get('current_price', position['avg_price'])
+            for symbol, position in self.positions.items()
+        }
+        
+        # Update daily metrics if it's a new day
+        if not self.daily_metrics or self.daily_metrics[-1].date.date() != timestamp.date():
+            self.update_daily_metrics(timestamp, current_prices)
+            
+        # Update cumulative metrics
+        self.cumulative_metrics = self.get_cumulative_metrics()
+        
+    def update_daily_metrics(self, date: datetime, current_prices: Dict[str, float]) -> None:
+        """Update daily performance metrics.
+        
+        Args:
+            date: Current date
+            current_prices: Current prices for each symbol
+        """
+        portfolio_value = self.get_portfolio_value(current_prices)
+        previous_portfolio_value = self.daily_metrics[-1].portfolio_value if self.daily_metrics else None
+        metrics = self.metrics_calculator.calculate_daily_metrics(
+            date=date,
+            portfolio_value=portfolio_value,
+            cash=self.cash,
+            positions=self.positions,
+            trades=self.trades,
+            previous_portfolio_value=previous_portfolio_value,
+            current_prices=current_prices
+        )
+        self.daily_metrics.append(metrics)
+        # Update cumulative metrics
+        self.cumulative_metrics = self.metrics_calculator.calculate_cumulative_metrics(
+            daily_metrics=self.daily_metrics,
+            initial_capital=self.initial_capital,
+            trades=self.trades
+        )
+        
+    def get_cumulative_metrics(self) -> CumulativeMetrics:
+        """Get cumulative performance metrics.
+        
+        Returns:
+            CumulativeMetrics object
+        """
+        return self.metrics_calculator.calculate_cumulative_metrics(self.daily_metrics, self.initial_capital, self.trades)
+        
+    def get_daily_metrics_df(self) -> pd.DataFrame:
+        """Get daily metrics as a DataFrame.
+        
+        Returns:
+            DataFrame with daily metrics
+        """
+        return pd.DataFrame([m.to_dict() for m in self.daily_metrics])
+        
+    def get_current_metrics(self) -> Dict:
+        """Get current portfolio metrics including both daily and cumulative metrics.
+        
+        Returns:
+            Dictionary containing:
+            - daily_metrics: Latest daily metrics
+            - cumulative_metrics: Current cumulative metrics
+            - portfolio_value: Current total portfolio value
+            - positions: Current positions with their values
+        """
+        # Get latest daily metrics
+        latest_daily = self.daily_metrics[-1] if self.daily_metrics else None
+        
+        # Get current positions with their values
+        current_positions = {
+            symbol: {
+                'quantity': pos['quantity'],
+                'avg_price': pos['avg_price'],
+                'current_price': pos.get('current_price', pos['avg_price']),
+                'market_value': pos.get('market_value', pos['quantity'] * pos['avg_price']),
+                'unrealized_pnl': pos.get('market_value', pos['quantity'] * pos['avg_price']) - (pos['quantity'] * pos['avg_price'])
+            }
+            for symbol, pos in self.positions.items()
+        }
+        
+        return {
+            'daily_metrics': latest_daily.to_dict() if latest_daily else None,
+            'cumulative_metrics': self.cumulative_metrics.to_dict() if self.cumulative_metrics else None,
+            'portfolio_value': self.get_portfolio_value({symbol: pos['current_price'] for symbol, pos in self.positions.items()}),
+            'positions': current_positions,
+            'cash': self.cash
+        }
+
     def get_trade_history(self) -> pd.DataFrame:
-        """Get trade history as a DataFrame."""
-        return pd.DataFrame(self.trade_history) 
+        """Get the trade history as a DataFrame."""
+        return pd.DataFrame(self.trades, columns=['timestamp', 'symbol', 'action', 'quantity', 'price', 'total']) 
