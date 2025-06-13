@@ -12,6 +12,7 @@ from sklearn.preprocessing import StandardScaler
 from src.strategies.base_strategy import BaseStrategy, StrategySignal
 from src.features.feature_store import FeatureStore
 from src.features.technical_indicators import TechnicalIndicators
+from src.config.strategy_config import RandomForestConfig
 
 class RandomForestStrategy(BaseStrategy):
     """
@@ -23,31 +24,19 @@ class RandomForestStrategy(BaseStrategy):
     
     def __init__(
         self,
+        config: Optional[RandomForestConfig] = None,
         feature_store: Optional[FeatureStore] = None,
-        n_estimators: int = 100,
-        max_depth: int = 5,
-        min_samples_split: int = 2,
-        lookback_window: int = 20,
-        cache_dir: str = 'feature_cache'
     ):
         """
         Initialize the Random Forest Strategy.
         
         Args:
+            config (Optional[RandomForestConfig]): Strategy configuration. If None, default config will be used.
             feature_store (Optional[FeatureStore]): Feature store instance. If None, a new one will be created.
-            n_estimators (int): Number of trees in the forest
-            max_depth (int): Maximum depth of the trees
-            min_samples_split (int): Minimum samples required to split a node
-            lookback_window (int): Number of days to look back for features
-            cache_dir (str): Directory for caching features
         """
         super().__init__(name="Random_Forest")
-        self.cache_dir = cache_dir
-        self.feature_store = feature_store or FeatureStore(cache_dir=cache_dir)
-        self.n_estimators = n_estimators
-        self.max_depth = max_depth
-        self.min_samples_split = min_samples_split
-        self.lookback_window = lookback_window
+        self.config = config or RandomForestConfig()
+        self.feature_store = feature_store or FeatureStore(cache_dir=self.config.cache_dir)
         self.model = None
         self.scaler = StandardScaler()
 
@@ -126,9 +115,9 @@ class RandomForestStrategy(BaseStrategy):
             
             # Create and train model
             self.model = RandomForestClassifier(
-                n_estimators=self.n_estimators,
-                max_depth=self.max_depth,
-                min_samples_split=self.min_samples_split,
+                n_estimators=self.config.n_estimators,
+                max_depth=self.config.max_depth,
+                min_samples_split=self.config.min_samples_split,
                 random_state=42)
         
             # Fit scaler and transform features
@@ -249,10 +238,10 @@ class RandomForestStrategy(BaseStrategy):
             Dict[str, Any]: Strategy parameters
         """
         return {
-            'n_estimators': self.n_estimators,
-            'max_depth': self.max_depth,
-            'min_samples_split': self.min_samples_split,
-            'lookback_window': self.lookback_window
+            'n_estimators': self.config.n_estimators,
+            'max_depth': self.config.max_depth,
+            'min_samples_split': self.config.min_samples_split,
+            'lookback_window': self.config.lookback_window
         }
     
     def set_parameters(self, parameters: Dict[str, Any]) -> None:
@@ -262,11 +251,4 @@ class RandomForestStrategy(BaseStrategy):
         Args:
             parameters (Dict[str, Any]): New strategy parameters
         """
-        if 'n_estimators' in parameters:
-            self.n_estimators = parameters['n_estimators']
-        if 'max_depth' in parameters:
-            self.max_depth = parameters['max_depth']
-        if 'min_samples_split' in parameters:
-            self.min_samples_split = parameters['min_samples_split']
-        if 'lookback_window' in parameters:
-            self.lookback_window = parameters['lookback_window'] 
+        self.config = RandomForestConfig(**parameters) 

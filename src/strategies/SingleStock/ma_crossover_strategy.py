@@ -11,6 +11,7 @@ import logging
 from src.features.feature_store import FeatureStore
 from src.features.technical_indicators import TechnicalIndicators, FeatureNames
 from src.strategies.base_strategy import BaseStrategy, StrategySignal
+from src.config.strategy_config import MACrossoverConfig
 
 class MACrossoverStrategy(BaseStrategy):
     """
@@ -24,24 +25,25 @@ class MACrossoverStrategy(BaseStrategy):
     and a sell signal is generated when the short MA crosses below the long MA.
     """
     
-    def __init__(self, short_window: int = 10, long_window: int = 50, cache_dir: str = 'feature_cache'):
+    def __init__(
+        self,
+        config: Optional[MACrossoverConfig] = None
+    ):
         """
         Initialize the MA Crossover Strategy.
         
         Args:
-            short_window (int): Window size for short-term moving average (default: 10)
-            long_window (int): Window size for long-term moving average (default: 50)
-            cache_dir (str): Directory for caching features
+            config (Optional[MACrossoverConfig]): Strategy configuration. If None, default config will be used.
+            feature_store (Optional[FeatureStore]): Feature store instance. If None, a new one will be created.
         """
         super().__init__(name="MA_Crossover")
-        self.short_window = short_window
-        self.long_window = long_window
-        self.cache_dir = cache_dir
-        self.feature_store = FeatureStore(cache_dir=cache_dir)
+        self.config = config or MACrossoverConfig()
+        self.feature_store = FeatureStore(cache_dir=self.config.cache_dir)
         self._prev_features = None  # Store previous features for crossover detection
         self.technical_indicators = TechnicalIndicators()
-        
+
     def train_model(self, data: pd.DataFrame, symbol: str):
+        """No training required for MA Crossover strategy."""
         return None
     
     def generate_signals(
@@ -144,10 +146,7 @@ class MACrossoverStrategy(BaseStrategy):
         Returns:
             List[str]: List of feature names
         """
-        return [
-            self.technical_indicators.FeatureNames.MA_SHORT,
-            self.technical_indicators.FeatureNames.MA_LONG
-        ]
+        return self.config.feature_columns
     
     def get_parameters(self) -> Dict[str, Any]:
         """
@@ -157,8 +156,9 @@ class MACrossoverStrategy(BaseStrategy):
             Dict[str, Any]: Strategy parameters
         """
         return {
-            'short_window': self.short_window,
-            'long_window': self.long_window
+            'short_window': self.config.short_window,
+            'long_window': self.config.long_window,
+            'feature_columns': self.config.feature_columns
         }
     
     def set_parameters(self, parameters: Dict[str, Any]) -> None:
@@ -168,7 +168,4 @@ class MACrossoverStrategy(BaseStrategy):
         Args:
             parameters (Dict[str, Any]): New strategy parameters
         """
-        if 'short_window' in parameters:
-            self.short_window = parameters['short_window']
-        if 'long_window' in parameters:
-            self.long_window = parameters['long_window'] 
+        self.config = MACrossoverConfig(**parameters) 
