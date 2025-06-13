@@ -11,18 +11,21 @@ class TestTradingSystem(unittest.TestCase):
         FeatureStore.reset_instance()
         self.symbols = ['AAPL', 'MSFT']
         self.start_date = datetime(2023, 1, 1)
-        self.end_date = datetime(2023, 12, 31)
+        self.end_date = datetime(2023, 1, 31)
         self.initial_budget = 10000.0
         
+        # Calculate the number of days between start_date and end_date
+        num_days = (self.end_date - self.start_date).days + 1
+
         # Mock data for AAPL and MSFT
         self.mock_data = {
             'AAPL': pd.DataFrame({
-                'close': np.random.rand(365),
-                'volume': np.random.rand(365)
+                'close': np.random.rand(num_days),
+                'volume': np.random.rand(num_days)
             }, index=pd.date_range(start=self.start_date, end=self.end_date, freq='D')),
             'MSFT': pd.DataFrame({
-                'close': np.random.rand(365),
-                'volume': np.random.rand(365)
+                'close': np.random.rand(num_days),
+                'volume': np.random.rand(num_days)
             }, index=pd.date_range(start=self.start_date, end=self.end_date, freq='D'))
         }
         
@@ -106,7 +109,6 @@ class TestTradingSystem(unittest.TestCase):
             self.assertTrue(val_dates.isdisjoint(test_dates))
             self.assertTrue(train_dates.isdisjoint(test_dates))
             
-    @unittest.skip("Temporarily disabled")
     def test_run_splits(self):
         """Test running the trading system on each split."""
         system = TradingSystem(
