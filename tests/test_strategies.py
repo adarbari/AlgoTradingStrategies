@@ -13,6 +13,7 @@ from src.strategies.SingleStock.ma_crossover_strategy import MACrossoverStrategy
 from src.strategies.SingleStock.random_forest_strategy import RandomForestStrategy
 from src.features.feature_store import FeatureStore
 from src.features.technical_indicators import TechnicalIndicators
+from src.config.strategy_config import MACrossoverConfig, RandomForestConfig
 
 @pytest.fixture
 def sample_data():
@@ -52,29 +53,33 @@ def mock_feature_store():
 @pytest.fixture
 def ma_strategy(mock_feature_store):
     """Create a MACrossoverStrategy instance for testing."""
-    strategy = MACrossoverStrategy(
+    config = MACrossoverConfig(
         short_window=5,
         long_window=20,
         cache_dir='tests/cache'
     )
+    strategy = MACrossoverStrategy(config=config)
     strategy.feature_store = mock_feature_store
     return strategy
 
 @pytest.fixture
 def rf_strategy(mock_feature_store):
     """Create a RandomForestStrategy instance for testing."""
-    strategy = RandomForestStrategy(feature_store=mock_feature_store)
+    config = RandomForestConfig(cache_dir='tests/cache')
+    strategy = RandomForestStrategy(config=config, feature_store=mock_feature_store)
     return strategy
 
 def test_ma_strategy_initialization(ma_strategy):
     """Test MACrossoverStrategy initialization."""
-    assert ma_strategy.short_window == 5
-    assert ma_strategy.long_window == 20
-    assert ma_strategy.cache_dir == 'tests/cache'
+    assert ma_strategy.config.short_window == 5
+    assert ma_strategy.config.long_window == 20
+    assert isinstance(ma_strategy.feature_store, FeatureStore)
 
 def test_rf_strategy_initialization(rf_strategy):
     """Test RandomForestStrategy initialization."""
     assert isinstance(rf_strategy.feature_store, FeatureStore)
+    assert rf_strategy.config.n_estimators == 100
+    assert rf_strategy.config.max_depth == 5
 
 def test_ma_strategy_prepare_data(ma_strategy, sample_data):
     """Test MACrossoverStrategy data preparation."""
@@ -148,6 +153,8 @@ def test_rf_strategy_generate_signals(rf_strategy, sample_data):
     probs = signals.probabilities
     assert 'BUY' in probs
     assert 'SELL' in probs
+    assert 'HOLD' in probs
+    assert sum(probs.values()) == pytest.approx(1.0)
 
 def test_ma_strategy_update(ma_strategy, sample_data):
     """Test MACrossoverStrategy update."""
@@ -212,10 +219,8 @@ def test_ma_strategy_parameters(ma_strategy):
         'long_window': 30
     }
     ma_strategy.set_parameters(new_params)
-    
-    # Check updated parameters
-    assert ma_strategy.short_window == 10
-    assert ma_strategy.long_window == 30
+    assert ma_strategy.config.short_window == 10
+    assert ma_strategy.config.long_window == 30
 
 def test_rf_strategy_parameters(rf_strategy):
     """Test RandomForestStrategy parameter management."""
@@ -223,17 +228,12 @@ def test_rf_strategy_parameters(rf_strategy):
     params = rf_strategy.get_parameters()
     assert 'n_estimators' in params
     assert 'max_depth' in params
-    assert 'min_samples_split' in params
     
     # Set new parameters
     new_params = {
         'n_estimators': 200,
-        'max_depth': 10,
-        'min_samples_split': 5
+        'max_depth': 10
     }
     rf_strategy.set_parameters(new_params)
-    
-    # Check updated parameters
-    assert rf_strategy.n_estimators == 200
-    assert rf_strategy.max_depth == 10
-    assert rf_strategy.min_samples_split == 5 
+    assert rf_strategy.config.n_estimators == 200
+    assert rf_strategy.config.max_depth == 10 
