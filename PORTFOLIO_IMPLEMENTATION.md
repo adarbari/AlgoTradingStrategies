@@ -268,51 +268,264 @@ class PortfolioConfig:
 ### Phase 4: Trade Execution System
 **Purpose**: Implement portfolio-level trade execution
 
-**Changes**:
-1. Create trade execution system
-   - Create: src/execution/trade_execution/
-     - New: base_executor.py
-       - Abstract base class for all executors
-       - Portfolio-level decision making
-       - Common execution utilities
-     - New: simple_portfolio_executor.py
-       - Basic position sizing
-       - Simple risk checks
-     - New: risk_budget_executor.py
-       - Risk-based position sizing
-       - Portfolio-level risk management
+**Implementation Plan**:
 
-2. Update configuration
-   - New: src/config/execution_config.py
-     - Executor type selection
-     - Risk parameters
-     - Position sizing rules
+1. **Core Components**:
 
-**Testing**:
-- Unit tests for each executor type
-- Integration tests with signal aggregators
-- End-to-end execution tests
+   a. **Trade Execution Orchestrator** (`trade_execution_orchestrator.py`):
+   ```python
+   class TradeExecutionOrchestrator:
+       def __init__(self, config: ExecutionConfig):
+           self.position_agent = PositionSizingAgent(config.position_config)
+           self.risk_agent = RiskManagementAgent(config.risk_config)
+           self.correlation_agent = CorrelationAgent(config.correlation_config)
+           self.execution_agent = ExecutionRulesAgent(config.execution_config)
+           self.state = ExecutionState()
 
-### Phase 5: Portfolio Strategy Base
+       def execute_trades(self, signals: Dict[str, StrategySignal], portfolio_state: PortfolioState) -> List[Trade]:
+           # Initialize execution state
+           self.state.update(signals, portfolio_state)
+           
+           # Get initial trade proposals from position agent
+           trades = self.position_agent.propose_trades(self.state)
+           
+           # Get risk adjustments
+           risk_adjustments = self.risk_agent.analyze_risk(trades, self.state)
+           trades = self.risk_agent.adjust_trades(trades, risk_adjustments)
+           
+           # Get correlation adjustments
+           correlation_adjustments = self.correlation_agent.analyze_correlations(trades, self.state)
+           trades = self.correlation_agent.adjust_trades(trades, correlation_adjustments)
+           
+           # Apply execution rules
+           trades = self.execution_agent.apply_rules(trades, self.state)
+           
+           return trades
+   ```
+
+   b. **Execution Agents**:
+   ```python
+   class BaseAgent:
+       def __init__(self, config: BaseConfig):
+           self.config = config
+           self.state = AgentState()
+
+   class PositionSizingAgent(BaseAgent):
+       """
+       Responsibilities:
+       - Calculate initial position sizes
+       - Propose trades based on signals
+       - Adjust for portfolio constraints
+       
+       State:
+       - Historical position sizes
+       - Performance metrics
+       - Portfolio allocation history
+       """
+
+   class RiskManagementAgent(BaseAgent):
+       """
+       Responsibilities:
+       - Calculate portfolio risk metrics
+       - Validate against risk limits
+       - Propose risk adjustments
+       
+       State:
+       - Risk metrics history
+       - Risk limit violations
+       - Risk adjustment history
+       """
+
+   class CorrelationAgent(BaseAgent):
+       """
+       Responsibilities:
+       - Calculate asset correlations
+       - Identify correlated positions
+       - Propose correlation-based adjustments
+       
+       State:
+       - Correlation matrix
+       - Historical correlations
+       - Adjustment history
+       """
+
+   class ExecutionRulesAgent(BaseAgent):
+       """
+       Responsibilities:
+       - Apply execution rules
+       - Set order parameters
+       - Handle trading restrictions
+       
+       State:
+       - Execution history
+       - Rule effectiveness
+       - Market impact metrics
+       """
+   ```
+
+2. **State Management**:
+
+   a. **Execution State** (`execution_state.py`):
+   ```python
+   class ExecutionState:
+       def __init__(self):
+           self.signals: Dict[str, StrategySignal]
+           self.portfolio_state: PortfolioState
+           self.trade_proposals: List[Trade]
+           self.risk_metrics: RiskMetrics
+           self.correlation_matrix: pd.DataFrame
+           self.execution_metrics: ExecutionMetrics
+   ```
+
+   b. **Agent State** (`agent_state.py`):
+   ```python
+   class AgentState:
+       def __init__(self):
+           self.historical_decisions: List[Decision]
+           self.performance_metrics: Dict[str, float]
+           self.learning_state: Dict[str, Any]
+   ```
+
+3. **Configuration System**:
+
+   a. **Agent Configs** (`agent_configs.py`):
+   ```python
+   @dataclass
+   class PositionSizingConfig:
+       method: str = "equal_weight"
+       max_position_size: float = 0.1
+       min_position_size: float = 0.01
+       learning_rate: float = 0.01
+       adaptation_period: int = 20
+
+   @dataclass
+   class RiskManagementConfig:
+       max_portfolio_risk: float = 0.15
+       max_position_risk: float = 0.05
+       var_limit: float = 0.02
+       risk_adjustment_speed: float = 0.1
+
+   @dataclass
+   class CorrelationConfig:
+       max_correlation: float = 0.7
+       correlation_lookback: int = 252
+       adjustment_factor: float = 0.5
+       update_frequency: str = "daily"
+
+   @dataclass
+   class ExecutionRulesConfig:
+       default_order_type: str = "LIMIT"
+       time_in_force: str = "DAY"
+       price_threshold: float = 0.01
+       market_impact_limit: float = 0.005
+   ```
+
+4. **Agent Communication**:
+
+   a. **Message Types** (`agent_messages.py`):
+   ```python
+   @dataclass
+   class TradeProposal:
+       trades: List[Trade]
+       confidence: float
+       reasoning: str
+
+   @dataclass
+   class RiskAdjustment:
+       adjustments: Dict[str, float]
+       risk_metrics: RiskMetrics
+       warnings: List[str]
+
+   @dataclass
+   class CorrelationAdjustment:
+       adjustments: Dict[str, float]
+       correlation_matrix: pd.DataFrame
+       affected_positions: List[str]
+   ```
+
+5. **Implementation Phases**:
+
+   a. **Phase 4.1: Core Infrastructure**
+   - Implement base agent framework
+   - Create state management system
+   - Set up agent communication
+
+   b. **Phase 4.2: Basic Agents**
+   - Implement position sizing agent
+   - Implement risk management agent
+   - Add basic execution rules
+
+   c. **Phase 4.3: Advanced Agents**
+   - Implement correlation agent
+   - Add adaptive learning
+   - Add sophisticated execution rules
+
+   d. **Phase 4.4: Testing and Integration**
+   - Add comprehensive test suite
+   - Integrate with existing components
+   - Performance optimization
+
+**Key Benefits of Agentic Architecture**:
+1. **Adaptive Behavior**: Agents can learn and adapt to market conditions
+2. **Collaborative Decision Making**: Agents can work together to optimize trades
+3. **Stateful Processing**: Each agent maintains its own state and history
+4. **Parallel Execution**: Agents can work independently where possible
+5. **Flexible Communication**: Agents can share information and negotiate
+
+**Example Usage**:
+```python
+# Create orchestrator with agent configurations
+config = ExecutionConfig(
+    position_config=PositionSizingConfig(method="risk_parity"),
+    risk_config=RiskManagementConfig(max_portfolio_risk=0.15),
+    correlation_config=CorrelationConfig(max_correlation=0.7),
+    execution_config=ExecutionRulesConfig(default_order_type="LIMIT")
+)
+
+orchestrator = TradeExecutionOrchestrator(config)
+
+# Execute trades
+trades = orchestrator.execute_trades(signals, portfolio_state)
+```
+
+### Phase 5: Portfolio Strategy Base ✅
 **Purpose**: Establish foundation for portfolio strategies
+**Status**: Completed
 
-**Changes**:
-1. Create portfolio strategy foundation
-   - New: src/strategies/portfolio/base_portfolio_strategy.py
-     - Extend existing portfolio_trading_execution_config.py
-     - Add strategy management
-     - Add signal aggregation interface
-   - New: src/strategies/portfolio/portfolio_strategy_registry.py
-     - Portfolio strategy registration
-     - Configuration validation
-   - Update: src/strategies/portfolio/portfolio_trading_execution_config.py
-     - Add strategy combination support
-     - Add allocation rules
+**Changes Implemented**:
+1. Created portfolio strategy foundation
+   - Created: src/strategies/portfolio/portfolio_trading_execution_config.py
+     - Implements a configuration and management class for portfolio trading.
+     - Allows adding tickers to the portfolio and associating one or more strategies (with optional configs) to each ticker.
+     - Allows associating a signal aggregator (with config) to each ticker.
+     - Provides methods to retrieve all tickers, all strategies for a ticker, and the aggregator for a ticker.
+     - Enforces only one instance of each strategy type per ticker and validates ticker/strategy/aggregator types.
+     - Integrates with the project's strategy/aggregator registries and config dataclasses.
+     - Does not implement portfolio-level signal aggregation or trade selection logic (reserved for later phases).
 
-**Testing**:
+2. Added comprehensive test suite
+   - Created: tests/test_portfolio_trading_execution_config.py
+     - Tests for base portfolio strategy
+     - Tests for strategy management
+     - Tests for signal aggregation integration
+   - Created: tests/test_strategy_mappings.py
+     - Tests for strategy type mappings
+     - Tests for strategy registration
+   - Created: tests/test_portfolio_trading_execution_config_factory.py
+     - Tests for factory pattern
+     - Tests for configuration creation
+     - Tests for strategy combination
+
+**Testing Completed**:
 - Unit tests for base portfolio strategy
-- Configuration validation tests
+- Unit tests for strategy mappings
+- Unit tests for configuration factory
 - Integration tests with signal aggregator
+- All tests passing
+
+**Next Steps**:
+- Proceed with Phase 6: Portfolio Signal Aggregation and Trade Selection
+- Begin implementation of portfolio-level signal aggregation
 
 ### Phase 6: Portfolio Signal Aggregation and Trade Selection
 **Purpose**: Enable portfolio-level signal aggregation and trade execution
@@ -658,3 +871,493 @@ BenchmarkRunner
 - Include tests with each phase
 - Add example configurations
 - Update documentation 
+
+**Orchestration Flow**:
+
+1. **System Input**:
+   ```python
+   class SystemInput:
+       signals: Dict[str, StrategySignal]  # Raw signals from strategies
+       market_data: MarketData            # Current market data
+       portfolio_state: PortfolioState    # Current portfolio state
+       execution_context: ExecutionContext # Execution parameters
+   ```
+
+2. **Agent Communication Flow**:
+   ```
+   ┌─────────────────────────────────────────────────────────┐
+   │                  Trade Execution Orchestrator           │
+   └─────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+   ┌─────────────────────────────────────────────────────────┐
+   │                    Position Sizing Agent                │
+   │ Input:                                                 │
+   │ - Raw signals                                          │
+   │ - Portfolio state                                      │
+   │ - Market data                                          │
+   │ Output:                                                │
+   │ - Initial trade proposals                              │
+   │ - Position size recommendations                        │
+   └─────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+   ┌─────────────────────────────────────────────────────────┐
+   │                    Risk Management Agent                │
+   │ Input:                                                 │
+   │ - Trade proposals                                      │
+   │ - Portfolio risk metrics                               │
+   │ - Market volatility                                    │
+   │ Output:                                                │
+   │ - Risk-adjusted trades                                 │
+   │ - Risk limit warnings                                  │
+   │ - Risk metrics updates                                 │
+   └─────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+   ┌─────────────────────────────────────────────────────────┐
+   │                    Correlation Agent                    │
+   │ Input:                                                 │
+   │ - Risk-adjusted trades                                 │
+   │ - Correlation matrix                                   │
+   │ - Portfolio positions                                  │
+   │ Output:                                                │
+   │ - Correlation-adjusted trades                          │
+   │ - Correlation warnings                                 │
+   │ - Diversification recommendations                      │
+   └─────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+   ┌─────────────────────────────────────────────────────────┐
+   │                    Execution Rules Agent                │
+   │ Input:                                                 │
+   │ - Final trade proposals                                │
+   │ - Market conditions                                    │
+   │ - Execution constraints                                │
+   │ Output:                                                │
+   │ - Executable orders                                    │
+   │ - Execution parameters                                 │
+   │ - Market impact estimates                              │
+   └─────────────────────────────────────────────────────────┘
+   ```
+
+3. **Detailed Agent Interactions**:
+
+   a. **Position Sizing Agent**:
+   ```python
+   class PositionSizingAgent:
+       def propose_trades(self, input: SystemInput) -> TradeProposal:
+           """
+           Input:
+           - signals: Dict[str, StrategySignal]
+               Example: {
+                   'AAPL': StrategySignal(signal=1.0, confidence=0.8),
+                   'MSFT': StrategySignal(signal=-0.5, confidence=0.6)
+               }
+           - portfolio_state: PortfolioState
+               Example: {
+                   'positions': {'AAPL': Position(quantity=100, avg_price=150.0)},
+                   'cash': 100000.0
+               }
+           - market_data: MarketData
+               Example: {
+                   'prices': {'AAPL': 150.0, 'MSFT': 280.0},
+                   'volumes': {'AAPL': 1000000, 'MSFT': 500000}
+               }
+
+           Output: TradeProposal
+               Example: {
+                   'trades': [
+                       Trade(symbol='AAPL', quantity=50, type='BUY'),
+                       Trade(symbol='MSFT', quantity=30, type='SELL')
+                   ],
+                   'confidence': 0.85,
+                   'reasoning': 'Strong buy signal for AAPL, moderate sell for MSFT'
+               }
+           """
+   ```
+
+   b. **Risk Management Agent**:
+   ```python
+   class RiskManagementAgent:
+       def analyze_risk(self, proposal: TradeProposal, state: ExecutionState) -> RiskAdjustment:
+           """
+           Input:
+           - proposal: TradeProposal
+               Example: {
+                   'trades': [
+                       Trade(symbol='AAPL', quantity=50, type='BUY'),
+                       Trade(symbol='MSFT', quantity=30, type='SELL')
+                   ]
+               }
+           - state: ExecutionState
+               Example: {
+                   'portfolio_risk': 0.15,
+                   'position_risks': {'AAPL': 0.05, 'MSFT': 0.03}
+               }
+
+           Output: RiskAdjustment
+               Example: {
+                   'adjustments': {'AAPL': 0.8, 'MSFT': 1.0},  # Scale factors
+                   'risk_metrics': {
+                       'portfolio_var': 0.02,
+                       'max_drawdown': 0.05
+                   },
+                   'warnings': ['AAPL position exceeds risk limit']
+               }
+           """
+   ```
+
+   c. **Correlation Agent**:
+   ```python
+   class CorrelationAgent:
+       def analyze_correlations(self, proposal: TradeProposal, state: ExecutionState) -> CorrelationAdjustment:
+           """
+           Input:
+           - proposal: TradeProposal
+               Example: {
+                   'trades': [
+                       Trade(symbol='AAPL', quantity=40, type='BUY'),
+                       Trade(symbol='MSFT', quantity=30, type='SELL')
+                   ]
+               }
+           - state: ExecutionState
+               Example: {
+                   'correlation_matrix': pd.DataFrame(...),
+                   'portfolio_correlations': {'AAPL-MSFT': 0.7}
+               }
+
+           Output: CorrelationAdjustment
+               Example: {
+                   'adjustments': {'AAPL': 0.7, 'MSFT': 1.0},  # Scale factors
+                   'correlation_matrix': pd.DataFrame(...),
+                   'affected_positions': ['AAPL', 'MSFT']
+               }
+           """
+   ```
+
+   d. **Execution Rules Agent**:
+   ```python
+   class ExecutionRulesAgent:
+       def apply_rules(self, proposal: TradeProposal, state: ExecutionState) -> List[Order]:
+           """
+           Input:
+           - proposal: TradeProposal
+               Example: {
+                   'trades': [
+                       Trade(symbol='AAPL', quantity=28, type='BUY'),
+                       Trade(symbol='MSFT', quantity=30, type='SELL')
+                   ]
+               }
+           - state: ExecutionState
+               Example: {
+                   'market_conditions': {
+                       'volatility': 0.15,
+                       'liquidity': 'high'
+                   },
+                   'execution_constraints': {
+                       'max_slippage': 0.001,
+                       'time_in_force': 'DAY'
+                   }
+               }
+
+           Output: List[Order]
+               Example: [
+                   Order(
+                       symbol='AAPL',
+                       quantity=28,
+                       type='LIMIT',
+                       price=150.0,
+                       time_in_force='DAY',
+                       execution_rules={
+                           'max_slippage': 0.001,
+                           'min_fill': 0.8
+                       }
+                   ),
+                   Order(
+                       symbol='MSFT',
+                       quantity=30,
+                       type='LIMIT',
+                       price=280.0,
+                       time_in_force='DAY',
+                       execution_rules={
+                           'max_slippage': 0.001,
+                           'min_fill': 0.8
+                       }
+                   )
+               ]
+           """
+   ```
+
+4. **State Management**:
+   ```python
+   class ExecutionState:
+       def __init__(self):
+           self.signals: Dict[str, StrategySignal]
+           self.portfolio_state: PortfolioState
+           self.market_data: MarketData
+           self.risk_metrics: RiskMetrics
+           self.correlation_matrix: pd.DataFrame
+           self.execution_metrics: ExecutionMetrics
+           self.agent_states: Dict[str, AgentState]
+   ```
+
+5. **Orchestration Process**:
+   ```
+   1. Initialize State
+      ├── Load portfolio state
+      ├── Update market data
+      └── Initialize agent states
+
+   2. Position Sizing
+      ├── Calculate initial positions
+      ├── Apply portfolio constraints
+      └── Generate trade proposals
+
+   3. Risk Management
+      ├── Calculate risk metrics
+      ├── Apply risk limits
+      └── Adjust trade sizes
+
+   4. Correlation Analysis
+      ├── Calculate correlations
+      ├── Identify correlated positions
+      └── Adjust for diversification
+
+   5. Execution Rules
+      ├── Apply execution constraints
+      ├── Set order parameters
+      └── Generate final orders
+
+   6. State Update
+      ├── Update portfolio state
+      ├── Update risk metrics
+      └── Update agent states
+   ```
+
+6. **Error Handling and Recovery**:
+   ```python
+   class OrchestrationError(Exception):
+       pass
+
+   class AgentError(OrchestrationError):
+       pass
+
+   class RecoveryStrategy:
+       def handle_error(self, error: AgentError, state: ExecutionState) -> RecoveryAction:
+           """
+           Handle errors in the orchestration process
+           - Retry failed operations
+           - Fall back to simpler strategies
+           - Notify monitoring system
+           """
+   ``` 
+
+**Position Resizing and Risk Feedback Loops**:
+
+1. **Risk-Based Resizing Flow**:
+   ```
+   ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+   │  Position       │     │  Risk           │     │  Position       │
+   │  Sizing Agent   │────▶│  Management     │────▶│  Resizing       │
+   └─────────────────┘     │  Agent          │     │  Agent          │
+         ▲                 └─────────────────┘     └─────────────────┘
+         │                         │                       │
+         │                         ▼                       │
+         │                 ┌─────────────────┐             │
+         └─────────────────│  Risk Feedback  │◀────────────┘
+                           │  Loop           │
+                           └─────────────────┘
+   ```
+
+2. **Risk Feedback Loop Implementation**:
+   ```python
+   class RiskFeedbackLoop:
+       def __init__(self, config: RiskFeedbackConfig):
+           self.max_iterations = config.max_iterations
+           self.risk_tolerance = config.risk_tolerance
+           self.resize_threshold = config.resize_threshold
+
+       def process(self, initial_proposal: TradeProposal, state: ExecutionState) -> TradeProposal:
+           """
+           Process trade proposal through risk feedback loop
+           """
+           current_proposal = initial_proposal
+           iteration = 0
+
+           while iteration < self.max_iterations:
+               # Get risk assessment
+               risk_assessment = self.risk_agent.analyze_risk(current_proposal, state)
+               
+               # Check if risk is within tolerance
+               if self._is_risk_acceptable(risk_assessment):
+                   break
+               
+               # Calculate required adjustments
+               adjustments = self._calculate_risk_adjustments(risk_assessment)
+               
+               # Apply adjustments
+               current_proposal = self._apply_risk_adjustments(current_proposal, adjustments)
+               
+               iteration += 1
+
+           return current_proposal
+
+       def _is_risk_acceptable(self, risk_assessment: RiskAssessment) -> bool:
+           """
+           Check if current risk levels are acceptable
+           """
+           return (
+               risk_assessment.portfolio_risk <= self.risk_tolerance.portfolio_risk and
+               risk_assessment.max_position_risk <= self.risk_tolerance.position_risk and
+               risk_assessment.var <= self.risk_tolerance.var
+           )
+
+       def _calculate_risk_adjustments(self, risk_assessment: RiskAssessment) -> Dict[str, float]:
+           """
+           Calculate position size adjustments based on risk
+           """
+           adjustments = {}
+           for position, risk in risk_assessment.position_risks.items():
+               if risk > self.risk_tolerance.position_risk:
+                   # Calculate reduction factor
+                   reduction = self.risk_tolerance.position_risk / risk
+                   adjustments[position] = max(reduction, self.resize_threshold)
+           return adjustments
+   ```
+
+3. **Position Resizing Agent**:
+   ```python
+   class PositionResizingAgent(BaseAgent):
+       def resize_positions(self, proposal: TradeProposal, risk_assessment: RiskAssessment) -> TradeProposal:
+           """
+           Resize positions based on risk assessment
+           """
+           resized_trades = []
+           for trade in proposal.trades:
+               # Get risk metrics for this position
+               position_risk = risk_assessment.position_risks[trade.symbol]
+               
+               # Calculate new size
+               new_size = self._calculate_new_size(
+                   trade.quantity,
+                   position_risk,
+                   risk_assessment.portfolio_risk
+               )
+               
+               # Create resized trade
+               resized_trade = Trade(
+                   symbol=trade.symbol,
+                   quantity=new_size,
+                   type=trade.type,
+                   price=trade.price
+               )
+               resized_trades.append(resized_trade)
+           
+           return TradeProposal(
+               trades=resized_trades,
+               confidence=proposal.confidence,
+               reasoning=f"Resized based on risk assessment: {risk_assessment.summary}"
+           )
+
+       def _calculate_new_size(self, current_size: int, position_risk: float, portfolio_risk: float) -> int:
+           """
+           Calculate new position size based on risk metrics
+           """
+           # Example risk-based sizing logic
+           if position_risk > self.config.max_position_risk:
+               # Reduce size proportionally to risk
+               reduction_factor = self.config.max_position_risk / position_risk
+               new_size = int(current_size * reduction_factor)
+           elif portfolio_risk > self.config.max_portfolio_risk:
+               # Reduce size to maintain portfolio risk
+               portfolio_reduction = self.config.max_portfolio_risk / portfolio_risk
+               new_size = int(current_size * portfolio_reduction)
+           else:
+               new_size = current_size
+           
+           return max(new_size, self.config.min_position_size)
+   ```
+
+4. **Risk-Based Resizing Configuration**:
+   ```python
+   @dataclass
+   class RiskFeedbackConfig:
+       max_iterations: int = 3
+       risk_tolerance: RiskTolerance = field(default_factory=lambda: RiskTolerance(
+           portfolio_risk=0.15,
+           position_risk=0.05,
+           var=0.02
+       ))
+       resize_threshold: float = 0.5  # Minimum position size as fraction of original
+
+   @dataclass
+   class RiskTolerance:
+       portfolio_risk: float
+       position_risk: float
+       var: float
+   ```
+
+5. **Integration with Orchestration**:
+   ```python
+   class TradeExecutionOrchestrator:
+       def execute_trades(self, signals: Dict[str, StrategySignal], portfolio_state: PortfolioState) -> List[Trade]:
+           # Initialize state
+           self.state.update(signals, portfolio_state)
+           
+           # Get initial trade proposals
+           initial_proposal = self.position_agent.propose_trades(self.state)
+           
+           # Process through risk feedback loop
+           risk_loop = RiskFeedbackLoop(self.config.risk_feedback)
+           final_proposal = risk_loop.process(initial_proposal, self.state)
+           
+           # Apply correlation adjustments
+           correlation_adjustments = self.correlation_agent.analyze_correlations(final_proposal, self.state)
+           final_proposal = self.correlation_agent.adjust_trades(final_proposal, correlation_adjustments)
+           
+           # Apply execution rules
+           orders = self.execution_agent.apply_rules(final_proposal, self.state)
+           
+           return orders
+   ```
+
+6. **Example Risk-Based Resizing Flow**:
+   ```
+   Initial Proposal:
+   - AAPL: Buy 100 shares
+   - MSFT: Sell 50 shares
+
+   Risk Assessment:
+   - AAPL position risk: 0.07 (exceeds limit of 0.05)
+   - MSFT position risk: 0.03 (within limits)
+   - Portfolio risk: 0.12 (within limits)
+
+   First Iteration:
+   - AAPL: Reduce to 71 shares (0.07 → 0.05 risk)
+   - MSFT: Keep 50 shares
+
+   Final Proposal:
+   - AAPL: Buy 71 shares
+   - MSFT: Sell 50 shares
+   ```
+
+7. **Monitoring and Logging**:
+   ```python
+   class RiskResizingMonitor:
+       def log_resizing_event(self, event: ResizingEvent):
+           """
+           Log position resizing events for monitoring and analysis
+           """
+           self.logger.info(
+               f"Position resized: {event.symbol} "
+               f"from {event.original_size} to {event.new_size} "
+               f"due to {event.reason}"
+           )
+           self.metrics.record_resizing(
+               symbol=event.symbol,
+               original_size=event.original_size,
+               new_size=event.new_size,
+               risk_metrics=event.risk_metrics
+           )
+   ``` 

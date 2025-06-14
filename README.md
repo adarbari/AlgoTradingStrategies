@@ -1,13 +1,18 @@
 # Algorithmic Trading System
 
-A modular algorithmic trading system that supports multiple strategies and real-time portfolio management.
+A modular algorithmic trading system that supports multiple strategies, portfolio management, and real-time trading capabilities.
 
 ## Features
 
-- Modular strategy architecture
-- Portfolio management with position tracking
-- Trade decision making with confidence thresholds
-- Support for multiple symbols
+- Multiple trading strategies:
+  - Moving Average Crossover
+  - Random Forest ML-based strategy
+  - Portfolio-based trading
+- Advanced portfolio management with position tracking
+- Signal aggregation for multi-strategy portfolios
+- Support for multiple data providers (Polygon, Yahoo Finance)
+- Feature engineering and caching system
+- Comprehensive metrics and visualization
 - Historical data backtesting
 - Real-time trading capabilities
 
@@ -15,21 +20,29 @@ A modular algorithmic trading system that supports multiple strategies and real-
 
 ```
 src/
-├── execution/
-│   ├── portfolio_manager.py  # Manages portfolio state and positions
-│   └── trade_executor.py      # Makes trade decisions based on signals
-├── strategies/
-│   ├── base_strategy.py      # Base class for all strategies
-│   └── ma_crossover_strategy.py  # Example MA Crossover strategy
-└── run_trading_system.py     # Main script to run the system
+├── data/               # Data fetching and processing
+│   ├── vendors/       # Data providers (Polygon, Yahoo Finance)
+│   └── data_loader.py # Data loading and caching
+├── execution/         # Trade execution and portfolio management
+│   ├── portfolio_manager.py
+│   ├── trade_executor.py
+│   └── signal_aggregation/
+├── features/          # Feature engineering
+│   ├── feature_store.py
+│   └── technical_indicators.py
+├── strategies/        # Trading strategies
+│   ├── SingleStock/   # Single stock strategies
+│   └── portfolio/     # Portfolio strategies
+├── visualization/     # Results visualization
+└── run_trading_system.py  # Main system driver
 ```
 
 ## Installation
 
 1. Create a virtual environment:
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
 
 2. Install dependencies:
@@ -39,17 +52,25 @@ pip install -r requirements.txt
 
 ## Usage
 
-1. Run the trading system:
+### Running a Single Strategy
+
 ```bash
-python src/run_trading_system.py
+PYTHONPATH=. python src/run_trading_system.py --symbol AAPL --strategy ma_crossover --start-date 2023-01-01 --end-date 2023-12-31
 ```
 
-2. The system will:
-   - Load historical data for specified symbols
-   - Run the MA Crossover strategy
-   - Make trade decisions based on signals
-   - Execute trades and manage the portfolio
-   - Display results including final portfolio value and returns
+### Running a Portfolio Strategy
+
+```bash
+PYTHONPATH=. python src/run_trading_system.py --portfolio default_portfolio --start-date 2023-01-01 --end-date 2023-12-31
+```
+
+### Running Backtests
+
+```bash
+PYTHONPATH=. python src/scripts/backtest.py --strategy ma_crossover
+# or
+PYTHONPATH=. python src/scripts/backtest.py --strategy random_forest
+```
 
 ## Adding New Strategies
 
@@ -63,7 +84,7 @@ To add a new strategy:
 
 Example:
 ```python
-from strategies.base_strategy import BaseStrategy
+from src.strategies.base_strategy import BaseStrategy
 
 class MyStrategy(BaseStrategy):
     def __init__(self):
@@ -80,12 +101,23 @@ class MyStrategy(BaseStrategy):
 
 ## Configuration
 
-The system can be configured by modifying the parameters in `run_trading_system.py`:
+The system can be configured through:
 
-- `symbols`: List of stock symbols to trade
-- `initial_budget`: Starting portfolio value
-- `start_date` and `end_date`: Backtesting period
-- Strategy parameters in the strategy classes
+1. Command line arguments in `run_trading_system.py`
+2. Strategy-specific configuration files
+3. Portfolio configuration through `PortfolioTradingExecutionConfigFactory`
+
+## Testing
+
+Run tests using pytest:
+```bash
+pytest tests/
+```
+
+For slow tests:
+```bash
+pytest tests/ -m "slow"
+```
 
 ## Contributing
 
