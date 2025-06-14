@@ -109,57 +109,189 @@ class TestRiskManagement:
 - Add risk monitoring
 - Performance optimization
 
-## Phase 4: Portfolio Optimization (Week 3)
+## Phase 4: Trade Execution System (Week 4)
 
-### 4.1 Test Suite
+### 4.1 Core Infrastructure
 ```python
-# tests/execution/test_portfolio_optimization.py
-class TestPortfolioOptimization:
-    def test_allocation_optimization(self):
-        # Test allocation optimization
-        pass
+# src/execution/trade_execution_orchestrator.py
+class TradeExecutionOrchestrator:
+    def __init__(self, config: ExecutionConfig):
+        self.position_agent = PositionSizingAgent(config.position_config)
+        self.risk_agent = RiskManagementAgent(config.risk_config)
+        self.correlation_agent = CorrelationAgent(config.correlation_config)
+        self.execution_agent = ExecutionRulesAgent(config.execution_config)
+        self.state = ExecutionState()
 
-    def test_rebalancing(self):
-        # Test portfolio rebalancing
-        pass
+    def execute_trades(self, signals: Dict[str, StrategySignal], portfolio_state: PortfolioState) -> List[Trade]:
+        # Initialize execution state
+        self.state.update(signals, portfolio_state)
+        
+        # Get initial trade proposals from position agent
+        trades = self.position_agent.propose_trades(self.state)
+        
+        # Get risk adjustments
+        risk_adjustments = self.risk_agent.analyze_risk(trades, self.state)
+        trades = self.risk_agent.adjust_trades(trades, risk_adjustments)
+        
+        # Get correlation adjustments
+        correlation_adjustments = self.correlation_agent.analyze_correlations(trades, self.state)
+        trades = self.correlation_agent.adjust_trades(trades, correlation_adjustments)
+        
+        # Apply execution rules
+        trades = self.execution_agent.apply_rules(trades, self.state)
+        
+        return trades
 ```
 
-### 4.2 Implementation
-- Implement portfolio optimization service
-- Add allocation strategies
-- Implement rebalancing logic
-- Integrate with existing components
-
-### 4.3 Integration
-- Integrate with risk management
-- Add performance monitoring
-- Optimize for different scenarios
-
-## Phase 5: Order Management (Week 4)
-
-### 5.1 Test Suite
+### 4.2 Agent Implementation
 ```python
-# tests/execution/test_order_management.py
-class TestOrderManagement:
-    def test_order_routing(self):
-        # Test order routing logic
-        pass
+# src/execution/agents/base_agent.py
+class BaseAgent:
+    def __init__(self, config: BaseConfig):
+        self.config = config
+        self.state = AgentState()
 
-    def test_execution_optimization(self):
-        # Test execution optimization
-        pass
+# src/execution/agents/position_sizing_agent.py
+class PositionSizingAgent(BaseAgent):
+    """
+    Responsibilities:
+    - Calculate initial position sizes
+    - Propose trades based on signals
+    - Adjust for portfolio constraints
+    """
+
+# src/execution/agents/risk_management_agent.py
+class RiskManagementAgent(BaseAgent):
+    """
+    Responsibilities:
+    - Calculate portfolio risk metrics
+    - Validate against risk limits
+    - Propose risk adjustments
+    """
+
+# src/execution/agents/correlation_agent.py
+class CorrelationAgent(BaseAgent):
+    """
+    Responsibilities:
+    - Calculate asset correlations
+    - Identify correlated positions
+    - Propose correlation-based adjustments
+    """
+
+# src/execution/agents/execution_rules_agent.py
+class ExecutionRulesAgent(BaseAgent):
+    """
+    Responsibilities:
+    - Apply execution rules
+    - Set order parameters
+    - Handle trading restrictions
+    """
 ```
 
-### 5.2 Implementation
-- Implement order management service
-- Add smart order routing
-- Implement execution optimization
-- Integrate with existing components
+### 4.3 State Management
+```python
+# src/execution/state/execution_state.py
+class ExecutionState:
+    def __init__(self):
+        self.signals: Dict[str, StrategySignal]
+        self.portfolio_state: PortfolioState
+        self.trade_proposals: List[Trade]
+        self.risk_metrics: RiskMetrics
+        self.correlation_matrix: pd.DataFrame
+        self.execution_metrics: ExecutionMetrics
 
-### 5.3 Integration
-- Integrate with portfolio optimization
-- Add order monitoring
-- Performance testing
+# src/execution/state/agent_state.py
+class AgentState:
+    def __init__(self):
+        self.historical_decisions: List[Decision]
+        self.performance_metrics: Dict[str, float]
+        self.learning_state: Dict[str, Any]
+```
+
+### 4.4 Configuration System
+```python
+# src/config/execution_config.py
+@dataclass
+class PositionSizingConfig:
+    method: str = "equal_weight"
+    max_position_size: float = 0.1
+    min_position_size: float = 0.01
+    learning_rate: float = 0.01
+    adaptation_period: int = 20
+
+@dataclass
+class RiskManagementConfig:
+    max_portfolio_risk: float = 0.15
+    max_position_risk: float = 0.05
+    var_limit: float = 0.02
+    risk_adjustment_speed: float = 0.1
+
+@dataclass
+class CorrelationConfig:
+    max_correlation: float = 0.7
+    correlation_lookback: int = 252
+    adjustment_factor: float = 0.5
+    update_frequency: str = "daily"
+
+@dataclass
+class ExecutionRulesConfig:
+    default_order_type: str = "LIMIT"
+    time_in_force: str = "DAY"
+    price_threshold: float = 0.01
+    market_impact_limit: float = 0.005
+```
+
+### 4.5 Risk Feedback Loop
+```python
+# src/execution/risk/risk_feedback_loop.py
+class RiskFeedbackLoop:
+    def __init__(self, config: RiskFeedbackConfig):
+        self.max_iterations = config.max_iterations
+        self.risk_tolerance = config.risk_tolerance
+        self.resize_threshold = config.resize_threshold
+
+    def process(self, initial_proposal: TradeProposal, state: ExecutionState) -> TradeProposal:
+        current_proposal = initial_proposal
+        iteration = 0
+
+        while iteration < self.max_iterations:
+            risk_assessment = self.risk_agent.analyze_risk(current_proposal, state)
+            if self._is_risk_acceptable(risk_assessment):
+                break
+            adjustments = self._calculate_risk_adjustments(risk_assessment)
+            current_proposal = self._apply_risk_adjustments(current_proposal, adjustments)
+            iteration += 1
+
+        return current_proposal
+```
+
+### 4.6 Testing Strategy
+1. **Unit Tests**
+   - Test each agent in isolation
+   - Test state management
+   - Test configuration loading
+   - Test risk feedback loop
+
+2. **Integration Tests**
+   - Test agent interactions
+   - Test end-to-end trade execution
+   - Test error handling
+   - Test performance under load
+
+3. **Scenario Tests**
+   - Test different market conditions
+   - Test risk limit scenarios
+   - Test correlation scenarios
+   - Test execution rule scenarios
+
+### 4.7 Success Criteria
+1. All agents working together seamlessly
+2. Risk limits properly enforced
+3. Correlation adjustments effective
+4. Execution rules properly applied
+5. Performance metrics within targets
+6. Error handling robust
+7. Monitoring and logging complete
 
 ## Testing Strategy
 
@@ -257,7 +389,7 @@ class TestOrderManagement:
 - Week 1: Core Infrastructure and Signal Aggregation Integration
 - Week 2: Risk Management
 - Week 3: Portfolio Optimization
-- Week 4: Order Management
+- Week 4: Trade Execution System
 - Week 5: Testing and Deployment
 - Week 6: Monitoring and Maintenance
 - Week 7: Documentation and Handover 
