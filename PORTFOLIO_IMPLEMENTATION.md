@@ -69,11 +69,19 @@ src/
 **Purpose**: Separate signal generation from trade execution 
 ```
 Changes:
-- Rename: src/execution/trade_executor.py -> src/execution/portfolio_stocks_signal_aggregator.py
-- New: src/execution/base_signal_aggregator.py
+1. Refactor trade execution system
+   - Create: src/execution/signal_aggregation/
+     - New: base_aggregator.py
+     - New: single_stock_aggregator.py
+   - Create: src/execution/trade_execution/
+     - Move: trade_executor.py (refactored)
+   - Update: src/execution/portfolio_manager.py
+     - Add signal aggregation support
+     - Update trade execution interface
 
 Testing:
 - Unit tests for signal aggregation
+- Unit tests for trade execution
 - Integration tests with existing strategies
 - End-to-end test with minimal setup
 ```
@@ -83,48 +91,47 @@ Testing:
 ```
 Changes:
 1. Create portfolio strategy foundation
-   - New: src/strategies/portfolio/base_portfolio.py
-     - Configuration management
-     - PortfolioManager instance
-     - Strategy creation via registry
-     - Signal aggregation interface
-   - New: src/config/portfolio_config.py
-     - Stock list
-     - Strategy mapping
-     - Allocation rules
-   - New: src/strategies/portfolio/strategy_registry.py
+   - New: src/strategies/portfolio/base_portfolio_strategy.py
+     - Extend existing portfolio_trading_execution_config.py
+     - Add strategy management
+     - Add signal aggregation interface
+   - New: src/strategies/portfolio/portfolio_strategy_registry.py
      - Portfolio strategy registration
      - Configuration validation
+   - Update: src/strategies/portfolio/portfolio_trading_execution_config.py
+     - Add strategy combination support
+     - Add allocation rules
 
 Testing:
-- Unit tests for base portfolio
+- Unit tests for base portfolio strategy
 - Configuration validation tests
 - Integration tests with signal aggregator
 ```
 
-### Phase 4A: Basic Signal Aggregation
-**Purpose**: Enable basic portfolio signal aggregation
+### Phase 4: Portfolio Signal Aggregation and Trade Selection
+**Purpose**: Enable portfolio-level signal aggregation and trade execution
 ```
 Changes:
-- New: src/strategies/portfolio/aggregation/base_aggregator.py
-- New: src/strategies/portfolio/aggregation/weighted_aggregator.py
-- New: src/config/aggregation_config.py
+1. Implement signal aggregation
+   - Create: src/strategies/portfolio/aggregation/
+     - New: base_aggregator.py
+     - New: weighted_aggregator.py
+     - New: portfolio_signal_aggregator.py
+
+2. Implement trade selection
+   - Create: src/strategies/portfolio/execution/
+     - New: trade_selector.py
+     - New: portfolio_trade_executor.py
+
+3. Update configuration
+   - New: src/config/portfolio_execution_config.py
+     - Aggregation rules
+     - Trade selection rules
+     - Execution constraints
 
 Testing:
 - Unit tests for aggregators
-- Integration tests with portfolio base
-```
-
-### Phase 4B: Portfolio Trade Selection
-**Purpose**: Handle portfolio-level constraints and trade selection
-```
-Changes:
-- New: src/strategies/portfolio/trade_selection/base_selector.py
-- New: src/strategies/portfolio/trade_selection/constraint_selector.py
-- New: src/config/trade_selection_config.py
-
-Testing:
-- Unit tests for selectors
+- Unit tests for trade selection
 - Integration tests with portfolio strategies
 ```
 
@@ -132,15 +139,21 @@ Testing:
 **Purpose**: Implement concrete portfolio strategies
 ```
 Changes:
-1. MACrossover Portfolio
-   - New: src/strategies/portfolio/ma_crossover_portfolio.py
-   - New: tests/strategies/portfolio/test_ma_crossover_portfolio.py
-   - New: config/portfolio_strategies/ma_crossover.yaml
+1. Create portfolio strategy implementations
+   - Create: src/strategies/portfolio/strategies/
+     - New: ma_crossover_portfolio.py
+     - New: hybrid_portfolio.py
+     - New: multi_strategy_portfolio.py
 
-2. Hybrid Portfolio
-   - New: src/strategies/portfolio/hybrid_portfolio.py
-   - New: tests/strategies/portfolio/test_hybrid_portfolio.py
-   - New: config/portfolio_strategies/hybrid.yaml
+2. Add strategy configurations
+   - New: config/portfolio_strategies/
+     - ma_crossover.yaml
+     - hybrid.yaml
+     - multi_strategy.yaml
+
+3. Update strategy registry
+   - Add portfolio strategy support
+   - Add strategy combination support
 
 Testing:
 - Unit tests for each portfolio strategy
@@ -261,7 +274,7 @@ For each phase:
 src/
 ├── execution/                    # [EXISTING] Trade execution and portfolio management
 │   ├── portfolio_manager.py      # [EXISTING] Portfolio state management
-│   ├── trade_executor.py         # [EXISTING] To be refactored into single_stock_signal_aggregator.py
+│   ├── trade_executor.py         # [EXISTING - TO BE REFACTORED]
 │   └── metrics/                  # [EXISTING] Performance metrics
 │
 ├── features/                     # [EXISTING] Feature engineering and storage
