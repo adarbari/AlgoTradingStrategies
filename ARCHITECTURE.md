@@ -120,6 +120,128 @@ AlgoTradingModels/
 - Monitor memory usage
 - Profile code for bottlenecks
 
+## Service-Oriented Architecture (SOA) Guidelines
+
+### 1. Service Independence
+- Each strategy and agent should be designed as a potential standalone service
+- Minimize dependencies between components
+- Use clean interfaces for inter-service communication
+- Design for eventual service extraction
+
+### 2. Interface Design
+- Define clear service boundaries
+- Use well-documented APIs for inter-service communication
+- Implement versioning for service interfaces
+- Design interfaces to be technology-agnostic
+
+### 3. Service Components
+- **Strategy Services**
+  - Single stock trading strategies
+  - Portfolio management strategies
+  - Signal generation services
+  - Each strategy should be independently deployable
+
+- **Data Services**
+  - Market data providers
+  - Feature engineering services
+  - Data caching and storage
+  - Historical data management
+
+- **Execution Services**
+  - Trade execution
+  - Order management
+  - Position tracking
+  - Risk management
+
+- **Aggregation Services**
+  - Signal aggregation
+  - Portfolio aggregation
+  - Performance metrics aggregation
+
+### 4. Service Communication
+- Use message queues for asynchronous communication
+- Implement event-driven architecture
+- Design for eventual consistency
+- Handle service failures gracefully
+
+### 5. Data Management
+- Each service should own its data
+- Implement data versioning
+- Design for data consistency across services
+- Use appropriate data storage solutions per service
+
+### 6. Deployment Considerations
+- Design for containerization
+- Implement health checks
+- Use service discovery
+- Support horizontal scaling
+- Implement circuit breakers
+
+### 7. Service Extraction Strategy
+- Identify service boundaries
+- Plan for gradual extraction
+- Maintain backward compatibility
+- Implement feature flags for smooth transition
+
+## Implementation Guidelines for Service Extraction
+
+### 1. Current Implementation
+- Keep current monolithic structure
+- Design components as if they were services
+- Use dependency injection
+- Implement interface-based design
+
+### 2. Future Service Extraction
+- Plan for service boundaries
+- Design for API-first approach
+- Implement service discovery
+- Prepare for distributed deployment
+
+### 3. Interface Examples
+```python
+# Strategy Service Interface
+class StrategyService:
+    def generate_signals(self, data: MarketData) -> List[Signal]:
+        pass
+
+    def update_state(self, new_data: MarketData) -> None:
+        pass
+
+# Portfolio Service Interface
+class PortfolioService:
+    def update_positions(self, trades: List[Trade]) -> PortfolioState:
+        pass
+
+    def calculate_metrics(self) -> PortfolioMetrics:
+        pass
+
+# Signal Aggregation Service Interface
+class SignalAggregationService:
+    def aggregate_signals(self, signals: List[Signal]) -> AggregatedSignal:
+        pass
+
+    def update_weights(self, new_weights: Dict[str, float]) -> None:
+        pass
+```
+
+### 4. Service Dependencies
+- Minimize direct dependencies
+- Use dependency injection
+- Implement service locator pattern
+- Design for loose coupling
+
+### 5. Error Handling
+- Implement circuit breakers
+- Use retry mechanisms
+- Handle partial failures
+- Implement fallback strategies
+
+### 6. Monitoring and Logging
+- Implement distributed tracing
+- Use structured logging
+- Monitor service health
+- Track performance metrics
+
 ## Conclusion
 Following these guidelines will help maintain a clean, maintainable, and scalable codebase. If you have any questions or suggestions, please raise them in the project discussions.
 

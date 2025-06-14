@@ -1,6 +1,6 @@
 # Algorithmic Trading System
 
-A modular algorithmic trading system that supports multiple strategies, portfolio management, and real-time trading capabilities.
+A modular algorithmic trading system that supports multiple strategies, portfolio management, and real-time trading capabilities. The system is designed with service-oriented architecture in mind, allowing components to be extracted into independent services when needed.
 
 ## Features
 
@@ -15,6 +15,21 @@ A modular algorithmic trading system that supports multiple strategies, portfoli
 - Comprehensive metrics and visualization
 - Historical data backtesting
 - Real-time trading capabilities
+
+## Architecture
+
+The system is designed with a service-oriented architecture approach, where each component can potentially be extracted into an independent service. This includes:
+
+- **Strategy Services**: Individual trading strategies that can be deployed independently
+- **Portfolio Services**: Portfolio management and aggregation services
+- **Data Services**: Market data and feature engineering services
+- **Execution Services**: Trade execution and risk management services
+
+Each component is designed with:
+- Clean interfaces for inter-service communication
+- Minimal dependencies
+- Independent deployment capability
+- Service extraction readiness
 
 ## Project Structure
 
