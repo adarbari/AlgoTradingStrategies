@@ -3,10 +3,14 @@ Portfolio Trading Execution Configuration.
 """
 
 from typing import Dict, List, Any, Optional, Set
+from src.config.aggregation_config import AggregationConfig
 from src.config.strategy_config import MACrossoverConfig, RandomForestConfig
+from src.execution.signal_aggregation.base_aggregator import BaseAggregator
 from src.strategies.strategy_mappings import STRATEGY_CLASSES, CONFIG_CLASSES
 from src.strategies.base_strategy import BaseStrategy
 import logging
+from src.execution.signal_aggregation.aggregator_mappings import AGGREGATOR_CLASSES
+from src.config.base_enums import AggregatorType
 
 class PortfolioTradingExecutionConfig:
     """
@@ -32,6 +36,13 @@ class PortfolioTradingExecutionConfig:
         #     'MSFT': [MACrossoverStrategy(config3)]
         # }
         self.ticker_strategies: Dict[str, List[BaseStrategy]] = {}
+
+        # Dictionary mapping tickers to their list of aggregator instances
+        # Example: {
+        #     'AAPL': WeightedAverageAggregator(config1),
+        #     'MSFT': WeightedAverageAggregator(config2)
+        # }
+        self.ticker_aggregators: Dict[str, BaseAggregator] = {}
 
     def add_ticker(self, ticker: str) -> None:
         """
@@ -91,6 +102,31 @@ class PortfolioTradingExecutionConfig:
         if not existing_strategies:
             self.ticker_strategies[ticker].append(strategy_instance)
 
+    def add_ticker_signal_aggregator(self, ticker: str, aggregator_type: AggregatorType, config: AggregationConfig) -> None:
+        """
+        Add a signal aggregator to the portfolio.
+        
+        Args:
+            aggregator_type (str): The type of aggregator to add
+            config (Optional[Dict[str, Any]]): Optional configuration for the aggregator
+        """
+        if ticker not in self.tickers:
+            raise ValueError(f"Ticker {ticker} not in portfolio.")
+        
+        
+        if aggregator_type not in AggregatorType.__members__.values():
+            raise ValueError(f"Unknown aggregator type: {aggregator_type}")
+        
+        # Create aggregator instance with config
+        aggregator_class = AGGREGATOR_CLASSES[aggregator_type]
+        if aggregator_class is None:
+            raise ValueError(f"Unknown aggregator type: {aggregator_type}")
+        aggregator_instance = aggregator_class(config)
+        if ticker not in self.ticker_aggregators:
+            self.ticker_aggregators[ticker] = aggregator_instance
+        else:
+            raise ValueError(f"Aggregator for ticker {ticker} already exists.")
+
     def get_tickers(self) -> Set[str]:
         """Get all tickers in the portfolio."""
         return set(self.tickers)
@@ -100,3 +136,13 @@ class PortfolioTradingExecutionConfig:
         if ticker not in self.tickers:
             raise ValueError(f"Ticker {ticker} not in portfolio.")
         return self.ticker_strategies[ticker]
+    
+    def get_ticker_signal_aggregator(self, ticker: str) -> BaseAggregator:
+        """Get the signal aggregator for a ticker."""
+        if ticker not in self.tickers:
+            raise ValueError(f"Ticker {ticker} not in portfolio.")
+        return self.ticker_aggregators[ticker]
+    
+    
+    
+            

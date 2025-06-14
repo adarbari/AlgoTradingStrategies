@@ -4,7 +4,8 @@ Tests for the portfolio trading execution system.
 
 import pytest
 from src.strategies.portfolio.portfolio_trading_execution_config import PortfolioTradingExecutionConfig
-from src.strategies.strategy_mappings import StrategyType
+from src.strategies.strategy_mappings import STRATEGY_CLASSES, CONFIG_CLASSES
+from src.config.base_enums import StrategyType
 from src.strategies.SingleStock.ma_crossover_strategy import MACrossoverStrategy
 from src.strategies.SingleStock.random_forest_strategy import RandomForestStrategy
 

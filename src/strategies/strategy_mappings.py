@@ -9,27 +9,18 @@ from src.strategies.SingleStock.ma_crossover_strategy import MACrossoverStrategy
 from src.strategies.SingleStock.random_forest_strategy import RandomForestStrategy
 from src.config.strategy_config import MACrossoverConfig, RandomForestConfig
 from enum import Enum, auto
+from src.config.base_enums import StrategyType
 
-class StrategyType(Enum):
-    """Enum for strategy types."""
-    MA_CROSSOVER = 'ma_crossover'
-    RANDOM_FOREST = 'random_forest'
-
-STRATEGY_CLASSES: Dict[str, Type[BaseStrategy]] = {
+# Mapping of strategy types to their implementation classes
+STRATEGY_CLASSES = {
     StrategyType.MA_CROSSOVER: MACrossoverStrategy,
     StrategyType.RANDOM_FOREST: RandomForestStrategy
 }
 
-# Mapping of strategy types to their configuration classes
+# Mapping of strategy types to their config classes
 CONFIG_CLASSES = {
     StrategyType.MA_CROSSOVER: MACrossoverConfig,
     StrategyType.RANDOM_FOREST: RandomForestConfig
-}
-
-# Legacy strategy type mappings
-TYPE_MAPPINGS = {
-    StrategyType.MA_CROSSOVER: 'ma_crossover',
-    StrategyType.RANDOM_FOREST: 'random_forest'
 }
 
 # Required features for each strategy type

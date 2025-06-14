@@ -5,6 +5,7 @@ import numpy as np
 from src.run_trading_system import TradingSystem
 from src.features.feature_store import FeatureStore
 from src.config.strategy_config import MACrossoverConfig, RandomForestConfig
+from src.config.aggregation_config import WeightedAverageConfig
 
 class TestTradingSystem(unittest.TestCase):
     def setUp(self):
@@ -141,6 +142,14 @@ class TestTradingSystem(unittest.TestCase):
             self.assertIsInstance(cm['winning_trades'], int)
             self.assertIsInstance(cm['losing_trades'], int)
             
+        # Add new test for WeightedAverageConfig
+        config = WeightedAverageConfig(
+            weights={
+                'strategy1': 0.5,
+                'strategy2': 0.5
+            }
+        )
+
     def test_minimum_training_period(self):
         """Test that minimum training period is enforced."""
         # Try with insufficient data

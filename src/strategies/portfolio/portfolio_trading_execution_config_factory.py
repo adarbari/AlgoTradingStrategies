@@ -24,8 +24,11 @@ Example Usage:
 """
 
 from typing import Dict, Optional
+from src.config.aggregation_config import WeightedAverageConfig
 from src.strategies.portfolio.portfolio_trading_execution_config import PortfolioTradingExecutionConfig
-from src.strategies.strategy_mappings import STRATEGY_CLASSES, StrategyType
+from src.strategies.strategy_mappings import STRATEGY_CLASSES
+from src.config.base_enums import StrategyType, AggregatorType
+from src.execution.signal_aggregation.aggregator_mappings import AGGREGATOR_CLASSES
 
 class PortfolioTradingExecutionConfigFactory:
     """
@@ -160,5 +163,15 @@ class PortfolioTradingExecutionConfigFactory:
         for ticker, strategies in default_strategies.items():
             for strategy_type in strategies:
                 default_config.add_strategy_to_ticker(ticker, strategy_type)
+                
+        # Add default aggregator for each ticker
+        for ticker in default_tickers:
+            # Create weighted average config with equal weights for each strategy
+            weights = {
+                StrategyType.MA_CROSSOVER: 0.5,
+                StrategyType.RANDOM_FOREST: 0.5
+            }
+            aggregator_config = WeightedAverageConfig(weights=weights)
+            default_config.add_ticker_signal_aggregator(ticker, AggregatorType.WEIGHTED_AVERAGE, aggregator_config)
         
         self._configs['default_portfolio'] = default_config 

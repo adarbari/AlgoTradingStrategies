@@ -23,6 +23,130 @@ src/
 3. **Minimal Changes**: Each phase modifies few existing files
 4. **Independent Testing**: Each phase includes its own tests
 5. **Clear Boundaries**: Each phase has a specific purpose
+6. **Comprehensive Documentation**: All variables and complex data structures must be documented with examples
+
+## Documentation Standards
+
+### Variable Documentation
+Every variable in the codebase should be documented with:
+1. **Purpose**: What the variable represents
+2. **Type**: The data type and structure
+3. **Example**: A concrete example of the variable's value
+4. **Constraints**: Any validation rules or constraints
+
+Example:
+```python
+# Good documentation
+class SignalAggregator:
+    def aggregate_signals(self, signals: Dict[str, float], weights: Optional[Dict[str, float]] = None) -> float:
+        """
+        Aggregate multiple trading signals into a single signal.
+        
+        Args:
+            signals: Dictionary mapping strategy names to their signals
+                    Type: Dict[str, float]
+                    Example: {
+                        'ma_crossover': 1.0,     # Strong buy signal from MA strategy
+                        'random_forest': -0.5,   # Moderate sell signal from RF strategy
+                        'rsi': 0.0              # Neutral signal from RSI strategy
+                    }
+                    Constraints: 
+                    - Keys must be strategy names (strings)
+                    - Values must be between -1.0 and 1.0
+                    
+            weights: Optional dictionary mapping strategy names to their weights
+                    Type: Dict[str, float]
+                    Example: {
+                        'ma_crossover': 0.5,     # 50% weight for MA strategy
+                        'random_forest': 0.3,    # 30% weight for RF strategy
+                        'rsi': 0.2              # 20% weight for RSI strategy
+                    }
+                    Constraints:
+                    - Keys must match strategy names in signals
+                    - Values must be non-negative
+                    - Sum of weights should be 1.0 (will be normalized)
+        
+        Returns:
+            float: Aggregated signal value between -1.0 and 1.0
+                  Example: 0.35 (weighted average of signals)
+        """
+```
+
+### Complex Data Structure Documentation
+For complex data structures (e.g., nested dictionaries, custom classes), include:
+1. **Structure Diagram**: Visual representation of the data structure
+2. **Field Descriptions**: Purpose and constraints for each field
+3. **Usage Examples**: Common operations and transformations
+4. **Validation Rules**: How to validate the structure
+
+Example:
+```python
+class PortfolioConfig:
+    """
+    Configuration for a portfolio trading strategy.
+    
+    Structure:
+    {
+        'name': str,                    # Portfolio name
+        'stocks': List[str],            # List of stock symbols
+        'strategies': {                 # Strategy configuration per stock
+            'AAPL': {                   # Stock symbol
+                'ma_crossover': {       # Strategy name
+                    'weight': 0.6,      # Strategy weight
+                    'params': {         # Strategy parameters
+                        'short_window': 10,
+                        'long_window': 50
+                    }
+                },
+                'random_forest': {
+                    'weight': 0.4,
+                    'params': {
+                        'n_estimators': 100,
+                        'max_depth': 5
+                    }
+                }
+            }
+        }
+    }
+    
+    Example:
+    config = PortfolioConfig({
+        'name': 'tech_portfolio',
+        'stocks': ['AAPL', 'MSFT', 'GOOGL'],
+        'strategies': {
+            'AAPL': {
+                'ma_crossover': {
+                    'weight': 0.6,
+                    'params': {
+                        'short_window': 10,
+                        'long_window': 50
+                    }
+                },
+                'random_forest': {
+                    'weight': 0.4,
+                    'params': {
+                        'n_estimators': 100,
+                        'max_depth': 5
+                    }
+                }
+            }
+        }
+    })
+    """
+```
+
+### Documentation Requirements
+1. **Class Variables**: Document all class variables with their purpose and constraints
+2. **Method Parameters**: Document each parameter with type, purpose, and example
+3. **Return Values**: Document return types and possible values
+4. **Exceptions**: Document all possible exceptions and their causes
+5. **Complex Logic**: Add comments explaining complex algorithms or business rules
+
+### Documentation Tools
+1. **Type Hints**: Use Python type hints for all variables and parameters
+2. **Docstrings**: Use Google-style docstrings with Args, Returns, and Raises sections
+3. **Examples**: Include runnable examples in docstrings
+4. **Validation**: Document validation rules and constraints
 
 ## Implementation Phases
 
@@ -66,27 +190,100 @@ src/
 - Begin refactoring trade_executor.py into signal aggregator
 
 ### Phase 2: Single Stock Signal Aggregator
-**Purpose**: Separate signal generation from trade execution 
-```
-Changes:
-1. Refactor trade execution system
+**Purpose**: Separate signal generation from trade execution and establish foundation for different aggregation strategies
+
+**Changes**:
+1. Create signal aggregation system
    - Create: src/execution/signal_aggregation/
      - New: base_aggregator.py
-     - New: single_stock_aggregator.py
-   - Create: src/execution/trade_execution/
-     - Move: trade_executor.py (refactored)
-   - Update: src/execution/portfolio_manager.py
-     - Add signal aggregation support
-     - Update trade execution interface
+       - Abstract base class for all aggregators
+       - Standardized signal format
+       - Common aggregation utilities
+     - New: weighted_average_aggregator.py
+       - Current implementation moved from TradeExecutor
+       - Weighted by strategy confidence
+       - Simple numeric conversion
 
-Testing:
-- Unit tests for signal aggregation
-- Unit tests for trade execution
+2. Create adapter layer for backward compatibility
+   - Create: src/execution/adapters/
+     - New: legacy_adapter.py
+       - Wraps new components to work with existing code
+       - Maintains backward compatibility
+       - Gradual migration path
+
+3. Update configuration system
+   - New: src/config/aggregation_config.py
+     - Aggregator type selection
+     - Weight configuration
+     - Basic configuration parameters
+
+**Testing**:
+- Unit tests for weighted average aggregator
 - Integration tests with existing strategies
 - End-to-end test with minimal setup
+- Configuration loading tests
+
+**Migration Strategy**:
+1. Add new components without using them
+2. Add adapter layer
+3. Migrate one component at a time
+4. Test each migration
+5. Remove old code
+
+**Deployment Strategy**:
+1. Feature flags for new components
+2. Gradual rollout starting with non-critical paths
+3. Monitor performance and stability
+4. Full rollout when stable
+
+### Phase 3: Advanced Signal Aggregation
+**Purpose**: Add more sophisticated signal aggregation methods
+```
+Changes:
+1. Add ML-based aggregator
+   - New: src/execution/signal_aggregation/ml_based_aggregator.py
+     - Machine learning based aggregation
+     - Adaptive weights based on performance
+     - Feature engineering for ML model
+
+2. Add volatility-adjusted aggregator
+   - New: src/execution/signal_aggregation/volatility_adjusted_aggregator.py
+     - Adjusts signals based on stock volatility
+     - Reduces signal strength in high volatility
+     - Dynamic risk adjustment
+
+3. Update configuration
+   - Extend: src/config/aggregation_config.py
+     - ML model parameters
+     - Volatility adjustment parameters
+     - Performance tracking
 ```
 
-### Phase 3: Portfolio Strategy Base
+### Phase 4: Trade Execution System
+**Purpose**: Implement portfolio-level trade execution
+```
+Changes:
+1. Create trade execution system
+   - Create: src/execution/trade_execution/
+     - New: base_executor.py
+       - Abstract base class for all executors
+       - Portfolio-level decision making
+       - Common execution utilities
+     - New: simple_portfolio_executor.py
+       - Basic position sizing
+       - Simple risk checks
+     - New: risk_budget_executor.py
+       - Risk-based position sizing
+       - Portfolio-level risk management
+
+2. Update configuration
+   - New: src/config/execution_config.py
+     - Executor type selection
+     - Risk parameters
+     - Position sizing rules
+```
+
+### Phase 5: Portfolio Strategy Base
 **Purpose**: Establish foundation for portfolio strategies
 ```
 Changes:
@@ -108,7 +305,7 @@ Testing:
 - Integration tests with signal aggregator
 ```
 
-### Phase 4: Portfolio Signal Aggregation and Trade Selection
+### Phase 6: Portfolio Signal Aggregation and Trade Selection
 **Purpose**: Enable portfolio-level signal aggregation and trade execution
 ```
 Changes:
@@ -135,7 +332,7 @@ Testing:
 - Integration tests with portfolio strategies
 ```
 
-### Phase 5: Portfolio Strategy Implementation
+### Phase 7: Portfolio Strategy Implementation
 **Purpose**: Implement concrete portfolio strategies
 ```
 Changes:
@@ -161,7 +358,7 @@ Testing:
 - End-to-end tests with example data
 ```
 
-### Phase 6: Benchmark Runner
+### Phase 8: Benchmark Runner
 **Purpose**: Reuse existing code for portfolio benchmarking
 ```
 Changes:
@@ -181,7 +378,7 @@ Testing:
 - End-to-end benchmark tests
 ```
 
-### Phase 7: Performance Comparison
+### Phase 9: Performance Comparison
 **Purpose**: Enable strategy comparison and visualization
 ```
 Changes:

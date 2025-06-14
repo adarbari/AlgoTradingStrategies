@@ -1,7 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Optional
+from typing import Dict
 from datetime import datetime
+from src.config.base_enums import StrategyType
 from src.strategies.base_strategy import StrategySignal
+from src.config.aggregation_config import AggregationConfig
+
 
 class BaseAggregator(ABC):
     """
@@ -16,22 +19,10 @@ class BaseAggregator(ABC):
     - timestamp: datetime - When the signal was generated
     - features: Dict - Additional features used to generate the signal
     
-    Class Variables:
-        config: Dict[str, Any]
-            Configuration dictionary for the aggregator
-            Example: {
-                'min_confidence': 0.6,     # Minimum confidence threshold
-                'max_strategies': 5        # Maximum number of strategies to combine
-            }
-    
     Example usage:
     ```python
-    # Create aggregator with custom configuration
-    config = {
-        'min_confidence': 0.6,
-        'max_strategies': 5
-    }
-    aggregator = BaseAggregator(config)
+    # Create aggregator
+    aggregator = BaseAggregator()
     
     # Aggregate signals
     signals = {
@@ -49,24 +40,15 @@ class BaseAggregator(ABC):
     ```
     """
     
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(self, config: AggregationConfig):
         """
-        Initialize the base aggregator.
+        Initialize the aggregator with configuration.
         
         Args:
-            config: Optional configuration dictionary
-                   Type: Dict[str, Any]
-                   Example: {
-                       'min_confidence': 0.6,     # Minimum confidence threshold
-                       'max_strategies': 5        # Maximum number of strategies to combine
-                   }
-                   Constraints:
-                   - All values must be numeric
-                   - Values must be between 0.0 and 1.0 for confidence thresholds
-                   - max_strategies must be a positive integer
+            config: Configuration for the aggregator
         """
-        self.config = config or {}
-        
+        self.config = config
+    
     def validate_signal(self, signal: StrategySignal) -> None:
         """
         Validate a single signal.
@@ -121,15 +103,15 @@ class BaseAggregator(ABC):
         if not isinstance(signal.symbol, str):
             raise ValueError(f"Symbol must be a string, got {type(signal.symbol)}")
             
-    def validate_signals(self, signals: Dict[str, StrategySignal]) -> None:
+    def validate_signals(self, signals: Dict[StrategyType, StrategySignal]) -> None:
         """
         Validate a dictionary of signals.
         
         Args:
-            signals: Dictionary mapping strategy names to their signals
-                    Type: Dict[str, StrategySignal]
+            signals: Dictionary mapping strategy types to their signals
+                    Type: Dict[StrategyType, StrategySignal]
                     Example: {
-                        'ma_crossover': StrategySignal(
+                        StrategyType.MA_CROSSOVER: StrategySignal(
                             symbol='AAPL',
                             action='BUY',
                             probabilities={'BUY': 0.8, 'SELL': 0.1, 'HOLD': 0.1},
@@ -137,11 +119,11 @@ class BaseAggregator(ABC):
                             timestamp=datetime.now(),
                             features={...}
                         ),
-                        'random_forest': StrategySignal(...)
+                        StrategyType.RANDOM_FOREST: StrategySignal(...)
                     }
                     Constraints:
                     - Must be a non-empty dictionary
-                    - Keys must be strategy names (strings)
+                    - Keys must be StrategyType enum values
                     - Values must be valid StrategySignal objects
                     - All signals must be for the same symbol
                     
@@ -150,8 +132,8 @@ class BaseAggregator(ABC):
                       Examples:
                       - "Signals must be a dictionary, got <class 'list'>"
                       - "Signals dictionary cannot be empty"
-                      - "Strategy name must be a string, got <class 'int'>"
-                      - "Signal for ma_crossover must be a StrategySignal object, got <class 'dict'>"
+                      - "Strategy name must be a StrategyType enum, got <class 'str'>"
+                      - "Signal for MA_CROSSOVER must be a StrategySignal object, got <class 'dict'>"
                       - "All signals must be for the same symbol, got AAPL and MSFT"
         """
         if not isinstance(signals, dict):
@@ -162,8 +144,8 @@ class BaseAggregator(ABC):
             
         # Validate each signal
         for strategy, signal in signals.items():
-            if not isinstance(strategy, str):
-                raise ValueError(f"Strategy name must be a string, got {type(strategy)}")
+            if not isinstance(strategy, StrategyType):
+                raise ValueError(f"Strategy name must be a StrategyType enum, got {type(strategy)}")
                 
             self.validate_signal(signal)
             
@@ -174,7 +156,7 @@ class BaseAggregator(ABC):
                 raise ValueError(f"All signals must be for the same symbol, got {first_symbol} and {signal.symbol}")
                 
     @abstractmethod
-    def aggregate_signals(self, signals: Dict[str, StrategySignal], weights: Optional[Dict[str, float]] = None) -> StrategySignal:
+    def aggregate_signals(self, signals: Dict[str, StrategySignal]) -> StrategySignal:
         """
         Aggregate multiple signals into a single signal.
         
@@ -197,17 +179,6 @@ class BaseAggregator(ABC):
                     - Keys must be strategy names (strings)
                     - Values must be valid StrategySignal objects
                     - All signals must be for the same symbol
-                    
-            weights: Optional dictionary mapping strategy names to their weights
-                    Type: Dict[str, float]
-                    Example: {
-                        'ma_crossover': 0.5,     # 50% weight for MA strategy
-                        'random_forest': 0.5,    # 50% weight for RF strategy
-                    }
-                    Constraints:
-                    - Keys must match strategy names in signals
-                    - Values must be non-negative
-                    - Sum of weights should be 1.0 (will be normalized)
             
         Returns:
             StrategySignal: Aggregated signal object
@@ -221,10 +192,10 @@ class BaseAggregator(ABC):
                           )
                   
         Raises:
-            ValueError: If signals or weights have invalid structure or values
+            ValueError: If signals have invalid structure or values
                       Examples:
                       - "Signals must be a dictionary, got <class 'list'>"
                       - "Signal for ma_crossover must be a StrategySignal object, got <class 'dict'>"
-                      - "Weight for random_forest must be non-negative, got -0.3"
+                      - "Signal for random_forest must be a StrategySignal object, got <class 'dict'>"
         """
         pass 

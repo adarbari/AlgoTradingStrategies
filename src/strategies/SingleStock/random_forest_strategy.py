@@ -13,6 +13,7 @@ from src.strategies.base_strategy import BaseStrategy, StrategySignal
 from src.features.feature_store import FeatureStore
 from src.features.technical_indicators import TechnicalIndicators
 from src.config.strategy_config import RandomForestConfig
+from src.config.base_enums import StrategyType
 
 class RandomForestStrategy(BaseStrategy):
     """
@@ -32,7 +33,7 @@ class RandomForestStrategy(BaseStrategy):
         Args:
             config (Optional[RandomForestConfig]): Strategy configuration. If None, default config will be used.
        """
-        super().__init__(name="Random_Forest")
+        super().__init__(name=StrategyType.RANDOM_FOREST)
         self.config = config or RandomForestConfig()
         self.feature_store = FeatureStore.get_instance()
         self.model = None

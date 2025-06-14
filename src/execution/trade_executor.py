@@ -2,12 +2,16 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, List, Optional
 from src.execution.portfolio_manager import PortfolioManager
+from src.execution.signal_aggregation.base_aggregator import BaseAggregator
 from src.strategies.base_strategy import BaseStrategy, StrategySignal
 from src.helpers.logger import TradingLogger
 import logging
 from collections import defaultdict
 from src.strategies.portfolio.portfolio_trading_execution_config_factory import PortfolioTradingExecutionConfigFactory
+from src.config.aggregation_config import WeightedAverageConfig
 import pandas as pd
+
+from src.config.base_enums import StrategyType
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +44,8 @@ class TradeExecutor:
         self.current_features: Dict[str, Dict[str, float]] = {}  # symbol -> features
         self.trading_logger = trading_logger if trading_logger is not None else TradingLogger()
         self.max_position_value = 2000
+        
+        
         self._initialize_strategies()
         logger.info("TradeExecutor initialized with %d symbols", len(symbols))
 
@@ -84,7 +90,7 @@ class TradeExecutor:
         logger.info("Processing timestamp: %s", timestamp)
         
         # Get signals from all strategies for all symbols
-        all_signals: List[StrategySignal] = []
+        all_signals: Dict[str, Dict[StrategyType, StrategySignal]] = {}
         
         for symbol, features in self.current_features.items():
             if symbol not in self.strategies:
@@ -99,7 +105,9 @@ class TradeExecutor:
                         
                     signal = strategy.generate_signals(features, symbol, timestamp)
                     logger.info("Strategy %s generated signal for %s: %s", strategy.name, symbol, signal)
-                    all_signals.append(signal)
+                    if symbol not in all_signals:
+                        all_signals[symbol] = {}
+                    all_signals[symbol][strategy.name] = signal
                 except Exception as e:
                     logger.error("Error generating signals for strategy %s, symbol %s: %s", 
                                strategy.name, symbol, str(e))
@@ -109,9 +117,13 @@ class TradeExecutor:
             logger.info("No signals generated for timestamp %s", timestamp)
             return []
             
-        # Aggregate signals and make trade decisions
-        aggregated_signals = self._aggregate_signals(all_signals)
-        logger.info("Aggregated signals: %s", aggregated_signals)
+        # Aggregate signals per symbol and make trade decisions
+        aggregated_signals = {}
+        for symbol in all_signals.keys():
+            # Get all signals for this symbol from the strategy signals map
+            all_signals_for_symbol = all_signals[symbol]
+            aggregator = self.portfolio_trading_execution_config.get_ticker_signal_aggregator(symbol)
+            aggregated_signals[symbol] = aggregator.aggregate_signals(all_signals_for_symbol)
         
         # Convert aggregated signals to Trade objects
         trades = []
@@ -121,16 +133,11 @@ class TradeExecutor:
                 continue
                 
             current_price = self.current_prices[symbol]
-            action = None
-            confidence = abs(weighted_signal)
+            action = weighted_signal.action
+            confidence = abs(weighted_signal.confidence)
             
-            # More lenient signal thresholds
-            if weighted_signal >= 0.3:  # Lowered from 0.5
-                action = 'BUY'
-            elif weighted_signal <= -0.3:  # Raised from -0.5
-                action = 'SELL'
-            else:
-                continue  # No trade if signal is too weak
+            if weighted_signal.confidence < 0.5:
+                continue
                 
             quantity = self._calculate_position_size(symbol, current_price, confidence)
             if quantity > 0:
@@ -165,37 +172,6 @@ class TradeExecutor:
        
         return executed_trades
         
-    def _aggregate_signals(self, signals: List[StrategySignal]) -> Dict[str, float]:
-        """Aggregate signals from multiple strategies for each symbol."""
-        symbol_signals = defaultdict(list)
-        
-        # Group signals by symbol
-        for signal in signals:
-            symbol_signals[signal.symbol].append(signal)
-        
-        # Calculate weighted signals for each symbol
-        aggregated_signals = {}
-        for symbol, symbol_signals in symbol_signals.items():
-            total_confidence = sum(s.confidence for s in symbol_signals)
-            if total_confidence == 0:
-                continue
-            
-            # Convert actions to numeric values
-            action_values = {
-                'BUY': 1.0,
-                'SELL': -1.0,
-                'HOLD': 0.0
-            }
-            
-            # Calculate weighted signal
-            weighted_signal = sum(
-                action_values[s.action] * s.confidence 
-                for s in symbol_signals
-            ) / total_confidence
-            
-            aggregated_signals[symbol] = weighted_signal
-        
-        return aggregated_signals
         
     def _calculate_position_size(self, symbol: str, price: float, confidence: float) -> float:
         """Calculate position size based on portfolio value and confidence"""

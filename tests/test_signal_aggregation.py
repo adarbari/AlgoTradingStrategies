@@ -2,9 +2,10 @@ import pytest
 from datetime import datetime
 from src.execution.signal_aggregation.base_aggregator import BaseAggregator
 from src.execution.signal_aggregation.weighted_average_aggregator import WeightedAverageAggregator
-from src.execution.adapters.legacy_adapter import LegacyAdapter
 from src.strategies.base_strategy import StrategySignal
-from src.config.aggregation_config import AggregatorType, WeightedAverageConfig
+from src.execution.signal_aggregation.aggregator_mappings import AGGREGATOR_CLASSES
+from src.config.aggregation_config import WeightedAverageConfig
+from src.config.base_enums import StrategyType
 
 def test_weighted_average_aggregator():
     """
@@ -16,93 +17,102 @@ def test_weighted_average_aggregator():
     3. Signals with default equal weights
     4. Empty signal set
     """
-    # Create aggregator with weights
-    weights = {
-        'strategy1': 0.5,    # 50% weight
-        'strategy2': 0.3,    # 30% weight
-        'strategy3': 0.2     # 20% weight
-    }
-    aggregator = WeightedAverageAggregator(weights)
+    # Create aggregator with config
+    config = WeightedAverageConfig(
+        weights={
+            StrategyType.MA_CROSSOVER: 0.5,    # 50% weight
+            StrategyType.RANDOM_FOREST: 0.5     # 50% weight
+        }
+    )
+    aggregator = WeightedAverageAggregator(config)
     
     # Test case 1: Numeric signals with explicit weights
     signals = {
-        'strategy1': 1.0,    # Strong buy signal
-        'strategy2': -0.5,   # Moderate sell signal
-        'strategy3': 0.0     # Neutral signal
+        StrategyType.MA_CROSSOVER: StrategySignal(
+            symbol='AAPL',
+            action='BUY',
+            probabilities={'BUY': 0.4, 'SELL': 0.0, 'HOLD': 0.6},  # Adjusted to avoid tie
+            confidence=1.0,
+            timestamp=datetime.now(),
+            features={}
+        ),
+        StrategyType.RANDOM_FOREST: StrategySignal(
+            symbol='AAPL',
+            action='HOLD',
+            probabilities={'BUY': 0.0, 'SELL': 0.0, 'HOLD': 1.0},
+            confidence=0.0,
+            timestamp=datetime.now(),
+            features={}
+        )
     }
     
     result = aggregator.aggregate_signals(signals)
-    assert -1.0 <= result <= 1.0
-    assert abs(result - 0.35) < 0.001  # 1.0*0.5 + (-0.5)*0.3 + 0.0*0.2 = 0.35
+    assert isinstance(result, StrategySignal)
+    assert result.symbol == 'AAPL'
+    assert result.action == 'HOLD'  # Highest weighted probability
+    assert abs(result.probabilities['BUY'] - 0.2) < 0.001  # 0.4 * 0.5 + 0.0 * 0.5
+    assert abs(result.probabilities['SELL'] - 0.0) < 0.001  # 0.0 * 0.5 + 0.0 * 0.5
+    assert abs(result.probabilities['HOLD'] - 0.8) < 0.001  # 0.6 * 0.5 + 1.0 * 0.5
+    assert abs(result.confidence - 0.5) < 0.001  # 1.0 * 0.5 + 0.0 * 0.5
     
     # Test case 2: String signals with explicit weights
     signals = {
-        'strategy1': 'BUY',   # Will be converted to 1.0
-        'strategy2': 'SELL',  # Will be converted to -1.0
-        'strategy3': 'HOLD'   # Will be converted to 0.0
+        StrategyType.MA_CROSSOVER: StrategySignal(
+            symbol='AAPL',
+            action='BUY',
+            probabilities={'BUY': 1.0, 'SELL': 0.0, 'HOLD': 0.0},
+            confidence=1.0,
+            timestamp=datetime.now(),
+            features={}
+        ),
+        StrategyType.RANDOM_FOREST: StrategySignal(
+            symbol='AAPL',
+            action='SELL',
+            probabilities={'BUY': 0.0, 'SELL': 1.0, 'HOLD': 0.0},
+            confidence=1.0,
+            timestamp=datetime.now(),
+            features={}
+        )
     }
     result = aggregator.aggregate_signals(signals)
-    assert -1.0 <= result <= 1.0
-    assert abs(result - 0.2) < 0.001  # 1.0*0.5 + (-1.0)*0.3 + 0.0*0.2 = 0.2
+    assert isinstance(result, StrategySignal)
+    assert result.symbol == 'AAPL'
+    assert result.action in ['BUY', 'SELL']  # Equal weights, either could be highest
+    assert abs(result.probabilities['BUY'] - 0.5) < 0.001  # 1.0 * 0.5 + 0.0 * 0.5
+    assert abs(result.probabilities['SELL'] - 0.5) < 0.001  # 0.0 * 0.5 + 1.0 * 0.5
+    assert abs(result.probabilities['HOLD'] - 0.0) < 0.001  # 0.0 * 0.5 + 0.0 * 0.5
+    assert abs(result.confidence - 1.0) < 0.001  # 1.0 * 0.5 + 1.0 * 0.5
     
     # Test case 3: Signals with default equal weights
-    aggregator = WeightedAverageAggregator()  # No weights provided
+    # Provide explicit equal weights
+    config_equal = WeightedAverageConfig(weights={
+        StrategyType.MA_CROSSOVER: 0.5,
+        StrategyType.RANDOM_FOREST: 0.5
+    })
+    aggregator = WeightedAverageAggregator(config_equal)
     signals = {
-        'strategy1': 1.0,
-        'strategy2': -1.0
+        StrategyType.MA_CROSSOVER: StrategySignal(
+            symbol='AAPL',
+            action='BUY',
+            probabilities={'BUY': 1.0, 'SELL': 0.0, 'HOLD': 0.0},
+            confidence=1.0,
+            timestamp=datetime.now(),
+            features={}
+        ),
+        StrategyType.RANDOM_FOREST: StrategySignal(
+            symbol='AAPL',
+            action='SELL',
+            probabilities={'BUY': 0.0, 'SELL': 1.0, 'HOLD': 0.0},
+            confidence=1.0,
+            timestamp=datetime.now(),
+            features={}
+        )
     }
     result = aggregator.aggregate_signals(signals)
-    assert abs(result) < 0.001  # Should be close to 0 (equal weights)
-    
-    # Test case 4: Empty signal set
-    result = aggregator.aggregate_signals({})
-    assert result == 0.0
-
-def test_legacy_adapter():
-    """
-    Test the legacy adapter with various signal combinations.
-    
-    Test cases:
-    1. Multiple signals for same symbol
-    2. Signals for different symbols
-    3. Mixed signal types (BUY/SELL/HOLD)
-    """
-    adapter = LegacyAdapter()
-    
-    # Test case 1: Multiple signals for same symbol
-    signals = [
-        StrategySignal(
-            symbol='AAPL',
-            strategy='strategy1',
-            action='BUY',      # Will be converted to 1.0
-            confidence=0.8,    # Will be used as weight
-            timestamp=datetime.now()
-        ),
-        StrategySignal(
-            symbol='AAPL',
-            strategy='strategy2',
-            action='SELL',     # Will be converted to -1.0
-            confidence=0.6,    # Will be used as weight
-            timestamp=datetime.now()
-        )
-    ]
-    
-    result = adapter.aggregate_signals(signals)
-    assert 'AAPL' in result
-    assert -1.0 <= result['AAPL'] <= 1.0
-    assert abs(result['AAPL'] - 0.2) < 0.001  # (1.0*0.8 + (-1.0)*0.6) / (0.8 + 0.6)
-    
-    # Test case 2: Signals for different symbols
-    signals.append(
-        StrategySignal(
-            symbol='MSFT',
-            strategy='strategy1',
-            action='BUY',
-            confidence=0.9,
-            timestamp=datetime.now()
-        )
-    )
-    
-    result = adapter.aggregate_signals(signals)
-    assert 'MSFT' in result
-    assert result['MSFT'] == 1.0  # Single signal with confidence 0.9 
+    assert isinstance(result, StrategySignal)
+    assert result.symbol == 'AAPL'
+    assert result.action in ['BUY', 'SELL']  # Equal weights, either could be highest
+    assert abs(result.probabilities['BUY'] - 0.5) < 0.001
+    assert abs(result.probabilities['SELL'] - 0.5) < 0.001
+    assert abs(result.probabilities['HOLD'] - 0.0) < 0.001
+    assert abs(result.confidence - 1.0) < 0.001 

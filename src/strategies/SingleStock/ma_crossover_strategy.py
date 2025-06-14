@@ -12,6 +12,7 @@ from src.features.feature_store import FeatureStore
 from src.features.technical_indicators import TechnicalIndicators, FeatureNames
 from src.strategies.base_strategy import BaseStrategy, StrategySignal
 from src.config.strategy_config import MACrossoverConfig
+from src.config.base_enums import StrategyType
 
 class MACrossoverStrategy(BaseStrategy):
     """
@@ -36,7 +37,7 @@ class MACrossoverStrategy(BaseStrategy):
             config (Optional[MACrossoverConfig]): Strategy configuration. If None, default config will be used.
             feature_store (Optional[FeatureStore]): Feature store instance. If None, a new one will be created.
         """
-        super().__init__(name="MA_Crossover")
+        super().__init__(name=StrategyType.MA_CROSSOVER)
         self.config = config or MACrossoverConfig()
         self.feature_store = FeatureStore.get_instance()
         self._prev_features = None  # Store previous features for crossover detection

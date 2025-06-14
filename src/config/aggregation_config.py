@@ -1,113 +1,32 @@
 from dataclasses import dataclass
-from typing import Dict, Optional, List
-from enum import Enum
-
-class AggregatorType(Enum):
-    """
-    Types of signal aggregators available.
-    
-    Example usage:
-    ```python
-    # Current implementation
-    aggregator_type = AggregatorType.WEIGHTED_AVERAGE
-    
-    # Future implementations (commented out)
-    # aggregator_type = AggregatorType.ML_BASED
-    # aggregator_type = AggregatorType.VOLATILITY_ADJUSTED
-    ```
-    """
-    WEIGHTED_AVERAGE = "weighted_average"
-    # Add more aggregator types as they are implemented
-    # ML_BASED = "ml_based"
-    # VOLATILITY_ADJUSTED = "volatility_adjusted"
+from typing import Dict
+from .base_config import BaseConfig
 
 @dataclass
-class AggregatorConfig:
-    """
-    Base configuration for signal aggregators.
-    
-    Example usage:
-    ```python
-    config = AggregatorConfig(
-        type=AggregatorType.WEIGHTED_AVERAGE
-    )
-    ```
-    """
-    type: AggregatorType
-    
+class AggregationConfig(BaseConfig):
+    """Base configuration class for signal aggregators."""
+    pass
+
 @dataclass
-class WeightedAverageConfig(AggregatorConfig):
-    """
-    Configuration for weighted average aggregator.
-    
-    Example usage:
-    ```python
-    config = WeightedAverageConfig(
-        type=AggregatorType.WEIGHTED_AVERAGE,
-        weights={
-            'strategy1': 0.6,  # 60% weight for strategy1
-            'strategy2': 0.4   # 40% weight for strategy2
-        }
-    )
-    """
+class WeightedAverageConfig(AggregationConfig):
+    """Configuration for weighted average signal aggregation."""
     weights: Dict[str, float]
     
     def __post_init__(self):
-        self.type = AggregatorType.WEIGHTED_AVERAGE
-        # Validate weights
+        """Validate weights and set type."""
+        super().__post_init__()
+        
         if not self.weights:
             raise ValueError("Weights dictionary cannot be empty")
-        if not all(0 <= w <= 1 for w in self.weights.values()):
-            raise ValueError("All weights must be between 0 and 1")
-        # Normalize weights
+            
+        if not all(isinstance(w, (int, float)) for w in self.weights.values()):
+            raise ValueError("All weights must be numeric")
+            
+        if not all(w >= 0 for w in self.weights.values()):
+            raise ValueError("All weights must be non-negative")
+            
+        # Normalize weights to sum to 1.0
         total = sum(self.weights.values())
+        if total == 0:
+            raise ValueError("Sum of weights cannot be zero")
         self.weights = {k: v/total for k, v in self.weights.items()}
-
-# Add more config classes as new aggregators are implemented
-# @dataclass
-# class MLBasedConfig(AggregatorConfig):
-#     """
-#     Configuration for ML-based aggregator.
-#     
-#     Example usage:
-#     ```python
-#     config = MLBasedConfig(
-#         type=AggregatorType.ML_BASED,
-#         weights={
-#             'strategy1': 0.6,
-#             'strategy2': 0.4
-#         },
-#         model_path='models/signal_aggregator.pkl',
-#         feature_columns=['price', 'volume', 'volatility']
-#     )
-#     ```
-#     """
-#     model_path: str
-#     feature_columns: List[str]
-#     
-#     def __post_init__(self):
-#         self.type = AggregatorType.ML_BASED
-#         
-# @dataclass
-# class VolatilityAdjustedConfig(AggregatorConfig):
-#     """
-#     Configuration for volatility-adjusted aggregator.
-#     
-#     Example usage:
-#     ```python
-#     config = VolatilityAdjustedConfig(
-#         type=AggregatorType.VOLATILITY_ADJUSTED,
-#         weights={
-#             'strategy1': 0.6,
-#             'strategy2': 0.4
-#         },
-#         lookback_period=20,  # 20 days of historical data
-#         volatility_threshold=0.02  # 2% volatility threshold
-#     )
-#     ```
-#     """
-#     lookback_period: int
-#     volatility_threshold: float
-#     
-#     def __post_init__(self):
-#         self.type = AggregatorType.VOLATILITY_ADJUSTED 
