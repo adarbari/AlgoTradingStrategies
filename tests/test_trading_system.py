@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 from src.run_trading_system import TradingSystem
 from src.features.feature_store import FeatureStore
+from src.config.strategy_config import MACrossoverConfig, RandomForestConfig
 
 class TestTradingSystem(unittest.TestCase):
     def setUp(self):
@@ -164,6 +165,20 @@ class TestTradingSystem(unittest.TestCase):
         )
         train_days = (system.split_dates['train_end'] - system.split_dates['train_start']).days
         self.assertGreaterEqual(train_days, 30)
+
+def test_macrossover_config_defaults():
+    """Test default values for MACrossoverConfig."""
+    config = MACrossoverConfig()
+    assert config.short_window == 10
+    assert config.long_window == 50
+
+def test_randomforest_config_defaults():
+    """Test default values for RandomForestConfig."""
+    config = RandomForestConfig()
+    assert config.n_estimators == 100
+    assert config.max_depth == 5
+    assert config.min_samples_split == 2
+    assert config.min_samples_leaf == 1
 
 if __name__ == '__main__':
     unittest.main() 

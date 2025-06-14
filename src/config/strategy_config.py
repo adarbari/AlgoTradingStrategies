@@ -19,7 +19,8 @@ class RandomForestConfig(BaseStrategyConfig):
     """Configuration class for Random Forest Strategy."""
     n_estimators: int = 100
     max_depth: int = 5
-    min_samples_split: int = 2 
+    min_samples_split: int = 2
+    min_samples_leaf: int = 1
     random_state: int = 42  
     feature_columns: List[str] = field(default_factory=lambda: [
             # Price data

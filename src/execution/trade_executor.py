@@ -6,7 +6,7 @@ from src.strategies.base_strategy import BaseStrategy, StrategySignal
 from src.helpers.logger import TradingLogger
 import logging
 from collections import defaultdict
-from src.strategies.strategy_factory import StrategyFactory
+from src.strategies.portfolio.portfolio_trading_execution_config_factory import PortfolioTradingExecutionConfigFactory
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,7 @@ class TradeExecutor:
     ):
         self.portfolio_manager = portfolio_manager
         self.symbols = symbols
-        self.strategy_factory = StrategyFactory()
+        self.portfolio_trading_execution_config = PortfolioTradingExecutionConfigFactory.get_instance().create_config('default_portfolio')
         self.strategies: Dict[str, List[BaseStrategy]] = {}  # symbol -> list of strategies
         self.current_prices: Dict[str, float] = {}
         self.current_features: Dict[str, Dict[str, float]] = {}  # symbol -> features
@@ -47,7 +47,7 @@ class TradeExecutor:
         """Initialize strategies for each symbol."""
         for symbol in self.symbols:
             # Get all strategies for each symbol
-            self.strategies[symbol] = self.strategy_factory.get_all_strategies(symbol)
+            self.strategies[symbol] = self.portfolio_trading_execution_config.get_ticker_strategies(symbol)
         logger.info("Initialized strategies for %d symbols", len(self.symbols))
 
     def train_strategies(self, training_data: Dict[str, pd.DataFrame]):
