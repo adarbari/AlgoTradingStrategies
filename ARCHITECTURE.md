@@ -395,6 +395,170 @@ class SignalAggregationService:
    - Implement distributed tracing
    - Log service interactions
 
+## Trade Execution Orchestrator Usage Scenarios
+
+### Core Orchestrator Design Principles
+- Keep core orchestration logic scenario-agnostic
+- Separate execution environment specifics from core logic
+- Use dependency injection for environment-specific components
+- Maintain consistent interfaces across all scenarios
+
+### Usage Scenarios
+
+#### 1. Backtesting
+- **Purpose**: End-to-end strategy testing and historical performance analysis
+- **Key Components**:
+  ```python
+  class BacktestExecutionEnvironment:
+      def __init__(self, historical_data: HistoricalData):
+          self.data = historical_data
+          self.simulated_portfolio = SimulatedPortfolio()
+          
+      def execute_trade(self, order: Order) -> TradeResult:
+          """
+          Simulates trade execution using historical data
+          """
+          pass
+          
+      def get_market_data(self, timestamp: datetime) -> MarketData:
+          """
+          Retrieves historical market data
+          """
+          pass
+  ```
+
+#### 2. Strategy Benchmarking
+- **Purpose**: Compare strategy performance against other strategies
+- **Key Components**:
+  ```python
+  class BenchmarkExecutionEnvironment:
+      def __init__(self, strategies: List[Strategy]):
+          self.strategies = strategies
+          self.benchmark_portfolio = BenchmarkPortfolio()
+          
+      def execute_benchmark(self, timeframe: TimeFrame) -> BenchmarkResults:
+          """
+          Executes and compares multiple strategies
+          """
+          pass
+          
+      def calculate_metrics(self) -> Dict[str, float]:
+          """
+          Calculates performance metrics for comparison
+          """
+          pass
+  ```
+
+#### 3. Live Trading
+- **Purpose**: Real-time strategy execution
+- **Key Components**:
+  ```python
+  class LiveExecutionEnvironment:
+      def __init__(self, broker: Broker):
+          self.broker = broker
+          self.live_portfolio = LivePortfolio()
+          
+      def execute_trade(self, order: Order) -> TradeResult:
+          """
+          Executes trades through live broker
+          """
+          pass
+          
+      def get_market_data(self) -> MarketData:
+          """
+          Retrieves real-time market data
+          """
+          pass
+  ```
+
+### Scenario-Agnostic Core Components
+
+#### 1. Trade Execution Orchestrator
+```python
+class TradeExecutionOrchestrator:
+    def __init__(self, execution_environment: ExecutionEnvironment):
+        self.environment = execution_environment
+        self.signal_aggregator = SignalAggregationService()
+        self.risk_manager = RiskManagementService()
+        self.portfolio_optimizer = PortfolioOptimizationService()
+        self.order_manager = OrderManagementService()
+
+    async def execute_trades(self, signals: List[Signal], portfolio: Portfolio):
+        # Core orchestration logic remains the same across scenarios
+        aggregated_signal = self.signal_aggregator.aggregate_signals(signals)
+        position_size = self.risk_manager.calculate_position_size(
+            aggregated_signal, portfolio
+        )
+        allocation = self.portfolio_optimizer.optimize_allocation(portfolio)
+        orders = self.order_manager.create_orders(
+            allocation, position_size, aggregated_signal
+        )
+        
+        # Environment-specific execution
+        return await self.environment.execute_trade(orders)
+```
+
+#### 2. Common Interfaces
+```python
+class ExecutionEnvironment(ABC):
+    @abstractmethod
+    def execute_trade(self, order: Order) -> TradeResult:
+        pass
+        
+    @abstractmethod
+    def get_market_data(self) -> MarketData:
+        pass
+        
+    @abstractmethod
+    def get_portfolio_state(self) -> PortfolioState:
+        pass
+```
+
+### Implementation Guidelines
+
+#### 1. Core Logic Separation
+- Keep all scenario-specific logic in environment classes
+- Core orchestrator should only contain business logic
+- Use dependency injection for environment-specific components
+- Maintain consistent interfaces across all scenarios
+
+#### 2. Data Management
+- Use abstract data interfaces
+- Implement scenario-specific data providers
+- Cache data appropriately for each scenario
+- Handle data timing differences between scenarios
+
+#### 3. Error Handling
+- Implement scenario-specific error handling
+- Use appropriate logging for each scenario
+- Handle timing and latency differences
+- Implement appropriate retry mechanisms
+
+#### 4. Performance Considerations
+- Optimize for each scenario's requirements
+- Use appropriate caching strategies
+- Handle real-time vs. historical data differences
+- Implement appropriate monitoring
+
+### Example Usage
+
+```python
+# Backtesting
+backtest_env = BacktestExecutionEnvironment(historical_data)
+backtest_orchestrator = TradeExecutionOrchestrator(backtest_env)
+backtest_results = await backtest_orchestrator.execute_trades(signals, portfolio)
+
+# Benchmarking
+benchmark_env = BenchmarkExecutionEnvironment(strategies)
+benchmark_orchestrator = TradeExecutionOrchestrator(benchmark_env)
+benchmark_results = await benchmark_orchestrator.execute_trades(signals, portfolio)
+
+# Live Trading
+live_env = LiveExecutionEnvironment(broker)
+live_orchestrator = TradeExecutionOrchestrator(live_env)
+live_results = await live_orchestrator.execute_trades(signals, portfolio)
+```
+
 ## Conclusion
 Following these guidelines will help maintain a clean, maintainable, and scalable codebase. If you have any questions or suggestions, please raise them in the project discussions.
 

@@ -226,3 +226,25 @@ This project contains algorithmic trading models and strategies.
 - Smart order routing and execution
 - Portfolio optimization and rebalancing
 - Advanced order management 
+
+## Trade Execution Orchestrator
+
+The system's Trade Execution Orchestrator is designed to work seamlessly across different usage scenarios:
+
+### Usage Scenarios
+1. **Backtesting**
+   - End-to-end strategy testing
+   - Historical performance analysis
+   - Strategy validation
+
+2. **Strategy Benchmarking**
+   - Performance comparison
+   - Strategy evaluation
+   - Risk-adjusted returns analysis
+
+3. **Live Trading**
+   - Real-time execution
+   - Market data processing
+   - Portfolio management
+
+The orchestrator maintains a clean separation between core business logic and scenario-specific implementations, ensuring consistent behavior across all usage scenarios. 
