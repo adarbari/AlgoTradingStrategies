@@ -211,4 +211,18 @@ This project contains algorithmic trading models and strategies.
 
 ## Recent Update
 - Updated workflow to use Python 3.9, 3.10, and 3.11 for CI/CD.
-- The driver file is now `run_trading_system.py`. 
+- The driver file is now `run_trading_system.py`.
+
+## Implementation Phases
+
+### Phase 2: Signal Aggregation (Current)
+- Weighted average signal aggregation
+- Multi-strategy portfolio support
+- Signal validation and normalization
+- Portfolio-level signal generation
+
+### Phase 3: Advanced Orchestration (Planned)
+- Risk management and position sizing
+- Smart order routing and execution
+- Portfolio optimization and rebalancing
+- Advanced order management 
