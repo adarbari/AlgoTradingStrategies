@@ -1,5 +1,5 @@
 from typing import Dict, Optional
-from src.execution.trade_executor import Trade
+from src.execution.portfolio_trade_execution_orchestrator import Trade
 
 class RiskManager:
     """Class responsible for managing trading risk."""

@@ -731,7 +731,7 @@ src/
    - Handles position updates
    - Calculates portfolio value
 
-2. **TradeExecutor** [EXISTING - TO BE REFACTORED]
+2. **PortfolioTradeExecutionOrchestrator** [EXISTING - TO BE REFACTORED]
    - Currently: Handles signal aggregation and trade execution
    - Will be refactored into: Single stock signal aggregation only
 
@@ -838,7 +838,7 @@ BenchmarkRunner
 ## Implementation Notes
 
 ### Refactoring Points
-1. **TradeExecutor** → **SingleStockSignalAggregator**
+1. **PortfolioTradeExecutionOrchestrator** → **SingleStockSignalAggregator**
    - Remove trade execution responsibility
    - Focus on signal aggregation
    - Update all references

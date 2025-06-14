@@ -26,9 +26,14 @@ class Trade:
     strategy: str
     confidence: float
 
-class TradeExecutor:
+class PortfolioTradeExecutionOrchestrator:
     """
-    Orchestrates strategy signal generation, aggregates signals, decides trades, and executes them via PortfolioManager.
+    Orchestrates portfolio-wide trade execution by:
+    1. Managing multiple trading strategies per symbol
+    2. Aggregating signals from different strategies
+    3. Making trade decisions based on aggregated signals
+    4. Executing trades through the portfolio manager
+    5. Maintaining portfolio state and risk management
     """
     def __init__(
         self, 
@@ -47,7 +52,7 @@ class TradeExecutor:
         
         
         self._initialize_strategies()
-        logger.info("TradeExecutor initialized with %d symbols", len(symbols))
+        logger.info("PortfolioTradeExecutionOrchestrator initialized with %d symbols", len(symbols))
 
     def _initialize_strategies(self):
         """Initialize strategies for each symbol."""

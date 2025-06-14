@@ -4,6 +4,8 @@ Main script to run the trading system.
 
 import os
 import sys
+
+from src.execution.portfolio_manager import PortfolioManager
 # Add the project root directory to the Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
@@ -15,8 +17,7 @@ import pandas as pd
 from src.data.vendors.polygon_provider import PolygonProvider
 from src.data.base import DataCache
 from src.features.feature_store import FeatureStore
-from src.execution.portfolio_manager import PortfolioManager
-from src.execution.trade_executor import TradeExecutor
+from src.execution.portfolio_trade_execution_orchestrator import PortfolioTradeExecutionOrchestrator
 from src.helpers.logger import TradingLogger
 from src.utils.split_manager import SplitManager
 from src.execution.metrics.cumulative_metrics import CumulativeMetrics
@@ -171,7 +172,7 @@ class TradingSystem:
         
         # Initialize phase-specific components
         self.portfolio_manager = PortfolioManager(self.initial_budget)
-        self.trade_executor = TradeExecutor(
+        self.trade_executor = PortfolioTradeExecutionOrchestrator(
             portfolio_manager=self.portfolio_manager,
             symbols=self.symbols,
             trading_logger=self.logger
