@@ -9,9 +9,12 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 
+from src.data.types.base_types import TimeSeriesData
+from src.data.types.data_type import DataType
+from src.data.types.ohlcv_types import OHLCVData
 from src.strategies.base_strategy import BaseStrategy, StrategySignal
-from src.features.feature_store import FeatureStore
-from src.features.technical_indicators import TechnicalIndicators
+from src.features.core.feature_store import FeatureStore
+from src.features.implementations.technical_indicators import TechnicalIndicators
 from src.config.strategy_config import RandomForestConfig
 from src.config.base_enums import StrategyType
 
@@ -43,7 +46,7 @@ class RandomForestStrategy(BaseStrategy):
         self.feature_columns = self.config.feature_columns
         self.target_columns = self.config.target_columns 
         
-    def train_model(self, data: pd.DataFrame, symbol: str):
+    def train_model(self, data: TimeSeriesData, symbol: str):
         """
         Prepare data for the strategy by calculating features.
         
@@ -73,7 +76,7 @@ class RandomForestStrategy(BaseStrategy):
             X_scaled = self.scaler.fit_transform(X)
             self.model.fit(X_scaled, y)
     
-    def _get_all_features(self, data: pd.DataFrame, symbol: str) -> pd.DataFrame:
+    def _get_all_features(self, data: TimeSeriesData, symbol: str) -> pd.DataFrame:
         """
         Get training features for the strategy.
         
@@ -85,15 +88,19 @@ class RandomForestStrategy(BaseStrategy):
             pd.DataFrame: Training features
         """
         # Determine date range
-        start_date = data.index.min().strftime('%Y-%m-%d')
-        end_date = data.index.max().strftime('%Y-%m-%d')
+        # Get start and end date from TimeSeriesData object, ensuring timestamps are sorted
+        if data.timestamps:
+            sorted_timestamps = sorted(data.timestamps)
+            start_date = sorted_timestamps[0]#.strftime('%Y-%m-%d')
+            end_date = sorted_timestamps[-1]#.strftime('%Y-%m-%d')
+        else:
+            raise ValueError("No timestamps found in TimeSeriesData; cannot determine start and end date for feature extraction.")
         
         # Get features using the feature store
         features = self.feature_store.get_features(
             symbol=symbol,
-            data=data,
-            start_date=start_date,
-            end_date=end_date
+            start_timestamp=start_date,
+            end_timestamp=end_date
         )
         
         return features
@@ -125,9 +132,12 @@ class RandomForestStrategy(BaseStrategy):
                 timestamp=timestamp,
                 features=features
             )
-        
-        # Create DataFrame with features to preserve feature names
-        feature_df = pd.DataFrame([features])
+
+        # Call get_features API with the TimeSeriesData
+        feature_df = self.feature_store.get_features_at_timestamp(
+            symbol=symbol,
+            timestamp=timestamp
+        )
         
         # Ensure we have all required features
         missing_features = set(self.feature_columns) - set(feature_df.columns)

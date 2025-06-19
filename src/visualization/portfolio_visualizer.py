@@ -6,7 +6,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from typing import Optional, List, Dict
-from src.features.technical_indicators import TechnicalIndicators
+from src.features.implementations.technical_indicators import TechnicalIndicators
 
 # --- Helper Functions ---
 def _save_and_close(save_path: Optional[str] = None):

@@ -1,4 +1,10 @@
-from .yfinance_provider import YahooFinanceProvider
-from .polygon_provider import PolygonProvider
+"""Data vendor implementations."""
 
-__all__ = ['YahooFinanceProvider', 'PolygonProvider'] 
+from .rithmic import RithmicProvider
+# from .yfinance_provider import YahooFinanceProvider  # Removed, no longer implemented
+# Add other vendor providers here as needed
+
+__all__ = [
+    'RithmicProvider',
+    # 'YahooFinanceProvider',  # Removed
+] 

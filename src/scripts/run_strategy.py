@@ -17,8 +17,9 @@ from src.visualization.portfolio_visualizer import (
     plot_backtest_results
 )
 import pandas as pd
-from src.data.base import DataCache
+from src.data.cache.base import DataCache
 import numpy as np
+from src.data.cache.data_manager import DataManager
 
 def main():
     parser = argparse.ArgumentParser(description='Run trading strategy')
@@ -39,17 +40,18 @@ def main():
         
         # Initialize data provider
         data_cache = DataCache()
-        data_provider = PolygonProvider(cache=data_cache)
+        data_manager = DataManager(provider=PolygonProvider(), cache=data_cache)
         
         # Get historical data
         start_date = datetime.strptime(args.start_date, '%Y-%m-%d')
         end_date = datetime.strptime(args.end_date, '%Y-%m-%d')
         
-        data = data_provider.get_historical_data(
+        time_series_data = data_manager.get_data(
             symbol=args.symbol,
-            start_date=start_date,
-            end_date=end_date
+            start_time=start_date,
+            end_time=end_date
         )
+        data = time_series_to_dataframe(time_series_data)
         
         if data.empty:
             logger.error("No data found for %s in the specified date range", args.symbol)

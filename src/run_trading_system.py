@@ -5,6 +5,9 @@ Main script to run the trading system.
 import os
 import sys
 
+from src.data.types.base_types import TimeSeriesData
+from src.data.types.data_type import DataType
+from src.data.types.symbol import Symbol
 from src.execution.portfolio_manager import PortfolioManager
 # Add the project root directory to the Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -14,13 +17,14 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import pandas as pd
-from src.data.vendors.polygon_provider import PolygonProvider
-from src.data.base import DataCache
-from src.features.feature_store import FeatureStore
+from src.data.providers.vendors.polygon import PolygonProvider
+from src.features.core.feature_store import FeatureStore
 from src.execution.portfolio_trade_execution_orchestrator import PortfolioTradeExecutionOrchestrator
 from src.helpers.logger import TradingLogger
 from src.utils.split_manager import SplitManager
 from src.execution.metrics.cumulative_metrics import CumulativeMetrics
+from src.data.data_manager import DataManager
+
 
 # Initialize the trading logger first
 trading_logger = TradingLogger()
@@ -55,9 +59,10 @@ class TradingSystem:
         
         # Initialize components that are phase-independent
         self.logger = trading_logger  # Use the global trading logger
+        
         # Initialize data cache and pass it to PolygonProvider
-        self.data_cache = DataCache()
-        self.data_fetcher = PolygonProvider(cache=self.data_cache)
+        self.data_manager = DataManager(ohlcv_provider=PolygonProvider())
+    
         # Initialize feature store
         self.feature_store = FeatureStore.get_instance()
         
@@ -78,23 +83,23 @@ class TradingSystem:
         
         # Load historical data and calculate features
         self.historical_data = self._load_data()
-        self.features = self._calculate_and_cache_features()
+        self._calculate_and_cache_features()
         
         logger.info("TradingSystem initialized with %d symbols", len(symbols))
         
-    def _load_data(self) -> Dict[str, pd.DataFrame]:
+    def _load_data(self) -> Dict[str, TimeSeriesData]:
         """Load historical data for all symbols."""
         historical_data = {}
         
         for symbol in self.symbols:
             try:
-                data = self.data_fetcher.get_historical_data(
+                time_series_data = self.data_manager.get_ohlcv_data(
                     symbol=symbol,
-                    start_date=self.start_date,
-                    end_date=self.end_date
+                    start_time=self.start_date,
+                    end_time=self.end_date
                 )
-                if not data.empty:
-                    historical_data[symbol] = data
+                if time_series_data is not None:
+                    historical_data[symbol] = time_series_data
                 else:
                     logger.warning(f"No data found for {symbol}")
             except Exception as e:
@@ -103,27 +108,36 @@ class TradingSystem:
                 
         return historical_data
         
-    def _calculate_and_cache_features(self) -> Dict[str, pd.DataFrame]:
+    def _calculate_and_cache_features(self) -> Dict[Symbol, pd.DataFrame]:
         """Calculate and cache features for all symbols."""
         features = {}
         
         for symbol, data in self.historical_data.items():
             try:
-                symbol_features = self.feature_store.get_features(
+                # Convert TimeSeriesData to DataFrame for feature calculation
+                df = data.to_dataframe()
+                
+                # Generate features using the feature store
+                symbol_features = self.feature_store.generate_features(
                     symbol=symbol,
-                    data=data,
-                    start_date=self.start_date.strftime('%Y-%m-%d'),
-                    end_date=self.end_date.strftime('%Y-%m-%d')
+                    start_time=self.start_date,
+                    end_time=self.end_date
                 )
+                
                 if not symbol_features.empty:
                     features[symbol] = symbol_features
+                    logger.info(f"Generated features for {symbol}: {len(symbol_features)} rows")
+                else:
+                    logger.warning(f"No features generated for {symbol}")
+                    
             except Exception as e:
-                logger.error(f"Error calculating features for {symbol}: {e}")
+                logger.error(f"Error generating features for {symbol}: {e}")
                 continue
                 
+        logger.info(f"Successfully generated features for {len(features)} symbols")
         return features
         
-    def get_data_for_split(self, split_name: str) -> Dict[str, pd.DataFrame]:
+    def get_data_for_split(self, split_name: str) -> Dict[str, TimeSeriesData]:
         """Get data for a specific split (train, val, or test)."""
         split_data = {}
         
@@ -140,27 +154,38 @@ class TradingSystem:
         else:
             raise ValueError(f"Invalid split name: {split_name}")
         
-        for symbol, features in self.features.items():
+        for symbol, features in self.historical_data.items():
             # Use >= for start date and < for end date to prevent overlap
-            mask = (features.index >= split_start) & (features.index < split_end)
-            split_data[symbol] = features[mask]
-            
+            df = features.to_dataframe()
+            mask = (df.index >= split_start) & (df.index < split_end)
+            split_data[symbol] = TimeSeriesData(
+                timestamps=df[mask].index.tolist(),
+                data=df[mask].to_dict('records'),
+                data_type=self.historical_data[symbol].data_type)
         return split_data
         
     def _get_current_prices(self, timestamp: datetime) -> Dict[str, float]:
         """Get current prices for all symbols."""
         prices = {}
         for symbol, data in self.historical_data.items():
-            if timestamp in data.index:
-                prices[symbol] = data.loc[timestamp, 'close']
+            # TimeSeriesData stores timestamps in the .timestamps attribute (a list of datetime)
+            # To find the index of the given timestamp:
+            try:
+                idx = data.timestamps.index(timestamp)
+                prices[symbol] = data.data[idx].close
+            except ValueError:
+                logger.error(f"Timestamp {timestamp} not found in data for symbol {symbol}")
+                continue
         return prices
         
-    def _get_current_features(self, timestamp: datetime, split_data: Dict[str, pd.DataFrame]) -> Dict[str, Dict[str, float]]:
+    def _get_current_features(self, timestamp: datetime, split_data: Dict[str, TimeSeriesData]) -> Dict[str, Dict[str, float]]:
         """Get current features for all symbols."""
         features = {}
-        for symbol, data in split_data.items():
-            if timestamp in data.index:
-                features[symbol] = data.loc[timestamp].to_dict()
+        for symbol, ts_data in split_data.items():
+            # TimeSeriesData stores timestamps in .timestamps (list of datetime) and .data (list of dicts)
+            if timestamp in ts_data.timestamps:
+                idx = ts_data.timestamps.index(timestamp)
+                features[symbol] = ts_data.data[idx]
         return features
         
     def run(self, split_name: str = 'train') -> Dict:
@@ -188,7 +213,7 @@ class TradingSystem:
         # Get all unique timestamps in the split
         all_timestamps = set()
         for data in split_data.values():
-            all_timestamps.update(data.index)
+            all_timestamps.update(data.timestamps)
         timestamps = sorted(list(all_timestamps))
         
         # Run simulation
@@ -247,8 +272,8 @@ class TradingSystem:
         """Get trading results for the current phase."""
         # Get the last timestamp from historical data
         timestamps = [
-            max(data.index) for data in self.historical_data.values()
-            if not data.empty
+            max(data.to_dataframe().index) for data in self.historical_data.values()
+            if not data.to_dataframe().empty
         ]
         if not timestamps:
             default_metrics = CumulativeMetrics.create_default(self.portfolio_manager.initial_capital)

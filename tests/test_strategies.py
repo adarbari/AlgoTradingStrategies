@@ -11,8 +11,8 @@ from unittest.mock import Mock, patch
 from src.strategies.base_strategy import BaseStrategy, StrategySignal
 from src.strategies.SingleStock.ma_crossover_strategy import MACrossoverStrategy
 from src.strategies.SingleStock.random_forest_strategy import RandomForestStrategy
-from src.features.feature_store import FeatureStore
-from src.features.technical_indicators import TechnicalIndicators
+from src.features.core.feature_store import FeatureStore
+from src.features.implementations.technical_indicators import TechnicalIndicators
 from src.config.strategy_config import MACrossoverConfig, RandomForestConfig
 
 @pytest.fixture

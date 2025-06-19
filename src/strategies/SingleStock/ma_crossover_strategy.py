@@ -8,8 +8,9 @@ import pandas as pd
 import numpy as np
 import logging
 
-from src.features.feature_store import FeatureStore
-from src.features.technical_indicators import TechnicalIndicators, FeatureNames
+from src.data.types.base_types import TimeSeriesData
+from src.features.core.feature_store import FeatureStore
+from src.features.implementations.technical_indicators import TechnicalIndicators, FeatureNames
 from src.strategies.base_strategy import BaseStrategy, StrategySignal
 from src.config.strategy_config import MACrossoverConfig
 from src.config.base_enums import StrategyType
@@ -43,7 +44,7 @@ class MACrossoverStrategy(BaseStrategy):
         self._prev_features = None  # Store previous features for crossover detection
         self.technical_indicators = TechnicalIndicators()
 
-    def train_model(self, data: pd.DataFrame, symbol: str):
+    def train_model(self, data: TimeSeriesData, symbol: str):
         """No training required for MA Crossover strategy."""
         return None
     
@@ -66,6 +67,11 @@ class MACrossoverStrategy(BaseStrategy):
         """
         # Store current features for next comparison
         current_features = features.copy()
+
+         # Call get_features API with the TimeSeriesData
+        current_features = self.feature_store.get_features_at_timestamp(
+            symbol=symbol,
+            timestamp=timestamp)
 
         # Get 'ma_short' and 'ma_long' features from technical indicators
         ma_short = FeatureNames.MA_SHORT
@@ -93,19 +99,19 @@ class MACrossoverStrategy(BaseStrategy):
             confidence = 0.6
         else:
             # Check for crossover
-            if (current_features[ma_short] > current_features[ma_long] and 
-                self._prev_features[ma_short] <= self._prev_features[ma_long]):
+            if (current_features[ma_short].iloc[-1] > current_features[ma_long].iloc[-1] and 
+                self._prev_features[ma_short].iloc[-1] <= self._prev_features[ma_long].iloc[-1]):
                 # Bullish crossover
                 probabilities = {'BUY': 0.8, 'SELL': 0.1, 'HOLD': 0.1}
                 confidence = 0.8
-            elif (current_features[ma_short] < current_features[ma_long] and 
-                  self._prev_features[ma_short] >= self._prev_features[ma_long]):
+            elif (current_features[ma_short].iloc[-1] < current_features[ma_long].iloc[-1] and 
+                  self._prev_features[ma_short].iloc[-1] >= self._prev_features[ma_long].iloc[-1]):
                 # Bearish crossover
                 probabilities = {'BUY': 0.1, 'SELL': 0.8, 'HOLD': 0.1}
                 confidence = 0.8
             else:
                 # No crossover
-                if current_features[ma_short] > current_features[ma_long]:
+                if current_features[ma_short].iloc[-1] > current_features[ma_long].iloc[-1]:
                     # Uptrend
                     probabilities = {'BUY': 0.3, 'SELL': 0.1, 'HOLD': 0.6}
                     confidence = 0.6

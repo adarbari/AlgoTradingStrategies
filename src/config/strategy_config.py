@@ -4,7 +4,7 @@ Configuration classes for trading strategies.
 
 from dataclasses import dataclass, field
 from typing import Dict, Any, List
-from src.features.technical_indicators import TechnicalIndicators
+from src.features.implementations.technical_indicators import TechnicalIndicators
 
 
 @dataclass

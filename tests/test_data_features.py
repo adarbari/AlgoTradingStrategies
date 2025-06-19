@@ -1,20 +1,21 @@
 import unittest
 from datetime import datetime, timedelta
 import pandas as pd
-from src.data import YahooFinanceProvider
+from src.data.providers.vendors.polygon.polygon_provider import PolygonProvider
 from src.features import TechnicalIndicators
+from src.data.types.base_types import TimeSeriesData
 
 class TestDataAndFeatures(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures."""
-        self.data_provider = YahooFinanceProvider()
+        self.data_provider = PolygonProvider()
         self.feature_engineer = TechnicalIndicators()
         
         # Set up test dates
         end_date = datetime.now()
         start_date = end_date - timedelta(days=90)
-        self.start_date = start_date.strftime('%Y-%m-%d')
-        self.end_date = end_date.strftime('%Y-%m-%d')
+        self.start_date = start_date
+        self.end_date = end_date
         
         # Test symbol
         self.symbol = 'AAPL'
@@ -22,32 +23,33 @@ class TestDataAndFeatures(unittest.TestCase):
     def test_data_provider(self):
         """Test data provider functionality."""
         # Test historical data
-        df = self.data_provider.get_historical_data(
-            self.symbol,
-            self.start_date,
-            self.end_date
+        data = self.data_provider.get_data(
+            symbol=self.symbol,
+            start_time=self.start_date,
+            end_time=self.end_date
         )
         
-        self.assertIsInstance(df, pd.DataFrame)
-        self.assertFalse(df.empty)
-        self.assertTrue(isinstance(df.index, pd.DatetimeIndex))
-        self.assertTrue(all(col in df.columns for col in ['open', 'high', 'low', 'close', 'volume']))
+        self.assertIsInstance(data, TimeSeriesData)
+        self.assertTrue(len(data.timestamps) > 0)
+        self.assertTrue(len(data.data) > 0)
         
-        # Test company info
-        info = self.data_provider.get_company_info(self.symbol)
-        self.assertIsInstance(info, dict)
-        self.assertTrue('symbol' in info)
-        self.assertTrue('shortName' in info)
+        # Convert to DataFrame for column checks
+        df = pd.DataFrame(data.data, index=data.timestamps)
+        self.assertTrue(all(col in df.columns for col in ['open', 'high', 'low', 'close', 'volume']))
     
     def test_feature_engineering(self):
         """Test feature engineering functionality."""
         # Get historical data
-        df = self.data_provider.get_historical_data(
-            self.symbol,
-            self.start_date,
-            self.end_date
+        data = self.data_provider.get_data(
+            symbol=self.symbol,
+            start_time=self.start_date,
+            end_time=self.end_date
         )
-        
+        # Convert to DataFrame for feature calculation
+        if hasattr(data, 'to_dataframe'):
+            df = data.to_dataframe()
+        else:
+            df = pd.DataFrame(data.data, index=data.timestamps)
         # Test feature calculation
         features = [
             self.feature_engineer.FeatureNames.SMA_20,
@@ -55,7 +57,6 @@ class TestDataAndFeatures(unittest.TestCase):
             self.feature_engineer.FeatureNames.MACD
         ]
         df_with_features = self.feature_engineer.calculate_features(df, features)
-        
         self.assertIsInstance(df_with_features, pd.DataFrame)
         self.assertFalse(df_with_features.empty)
         self.assertTrue(all(feature in df_with_features.columns for feature in features))
@@ -72,15 +73,18 @@ class TestDataAndFeatures(unittest.TestCase):
     
     def test_data_consistency(self):
         """Test data consistency across operations."""
-        # Get historical data
-        df = self.data_provider.get_historical_data(
-            self.symbol,
-            self.start_date,
-            self.end_date
+        data = self.data_provider.get_data(
+            symbol=self.symbol,
+            start_time=self.start_date,
+            end_time=self.end_date
         )
-        
-        # Calculate features
+        if hasattr(data, 'to_dataframe'):
+            df = data.to_dataframe()
+        else:
+            df = pd.DataFrame(data.data, index=data.timestamps)
         df_with_features = self.feature_engineer.calculate_features(df)
+        self.assertIsInstance(df_with_features, pd.DataFrame)
+        self.assertEqual(len(df_with_features), len(df))
         
         # Verify data consistency
         self.assertTrue(df.index.equals(df_with_features.index))

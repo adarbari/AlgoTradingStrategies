@@ -8,8 +8,8 @@ import numpy as np
 import os
 import shutil
 from datetime import datetime, timedelta
-from src.features.feature_store import FeatureStore
-from src.features.technical_indicators import TechnicalIndicators
+from src.features.core.feature_store import FeatureStore
+from src.features.implementations.technical_indicators import TechnicalIndicators
 
 class TestFeatureStore(unittest.TestCase):
     @classmethod

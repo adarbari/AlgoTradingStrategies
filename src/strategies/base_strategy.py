@@ -9,6 +9,8 @@ import pandas as pd
 import numpy as np
 from dataclasses import dataclass
 
+from src.data.types.base_types import TimeSeriesData
+
 @dataclass
 class StrategySignal:
     """
@@ -42,7 +44,7 @@ class BaseStrategy(ABC):
         self.name = name
         
     @abstractmethod
-    def train_model(self, data: pd.DataFrame, symbol: str) -> None:
+    def train_model(self, data: TimeSeriesData, symbol: str) -> None:
         """Prepare data for the strategy.
         
         Args:
