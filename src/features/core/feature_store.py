@@ -39,8 +39,15 @@ class FeatureStore:
             self.cache_dir = self._cache_dir
             self.technical_indicators = TechnicalIndicators()
             self.metadata = FeatureStoreMetadata()
-            self._initialized = True
+            
+            # Initialize in-memory cache before loading from metadata
             self._in_memory_features = {}
+            
+            # Migrate existing metadata to use relative paths
+            self.metadata.migrate_to_relative_paths()
+            self.load_in_memory_Features_from_metadata()
+            
+            self._initialized = True
             self._data_manager = DataManager()
             
             # Load feature mapping from feature definitions
@@ -85,7 +92,9 @@ class FeatureStore:
             self._generate_feature_group(symbol, start_time, end_time, group)
         
         # Get the combined features from cache
-        return self.get_features(symbol, start_time, end_time)
+        features = self.get_features(symbol, start_time, end_time)
+        self.store_features_in_metadata(symbol=symbol,features_df=features,start_timestamp=start_time, end_timestamp=end_time)
+        return features
     
     def _group_features_by_dependencies(self, feature_names: List[str]) -> List[List[str]]:
         """
@@ -386,7 +395,7 @@ class FeatureStore:
         
         return None
     
-    def store_features(self, symbol: Symbol, features_df: pd.DataFrame, 
+    def store_features_in_metadata(self, symbol: Symbol, features_df: pd.DataFrame, 
                       start_timestamp: datetime, end_timestamp: datetime) -> str:
         """
         Store calculated features to file.
@@ -410,21 +419,34 @@ class FeatureStore:
         # Store the features
         joblib.dump(features_df, file_path)
         
-        # Create and store metadata
+        # Create and store metadata with only the filename (relative path)
         metadata = FeatureFileMetadata(
             symbol=symbol,
             start_timestamp=start_timestamp,
             end_timestamp=end_timestamp,
-            file_path=file_path,
+            file_path=filename,  # Store only filename, not full path
             feature_count=len(features_df.columns),
             created_at=datetime.now()
         )
-        self.metadata.add_file_metadata(symbol, metadata)
-        
-        # Add to in-memory cache
-        self._add_to_memory_cache(symbol, features_df)
+        self.metadata.add_file_metadata(symbol, metadata)   
         
         return file_path
+    
+    def store_features(self, symbol: Symbol, features_df: pd.DataFrame, 
+                      start_timestamp: datetime, end_timestamp: datetime) -> str:
+        """
+        Alias for store_features_in_metadata to maintain backward compatibility.
+        
+        Args:
+            symbol: Trading symbol
+            features_df: DataFrame with features
+            start_timestamp: Start timestamp of the data
+            end_timestamp: End timestamp of the data
+            
+        Returns:
+            Path to the stored file
+        """
+        return self.store_features_in_metadata(symbol, features_df, start_timestamp, end_timestamp)
     
     def _add_to_memory_cache(self, symbol: Symbol, features_df: pd.DataFrame):
         """Add features to in-memory cache."""
@@ -520,8 +542,11 @@ class FeatureStore:
             if (metadata.start_timestamp <= end_timestamp and 
                 metadata.end_timestamp >= start_timestamp):
                 
+                # Construct full file path from filename stored in metadata
+                full_file_path = os.path.join(self.cache_dir, metadata.file_path)
+                
                 try:
-                    cached_data = joblib.load(metadata.file_path)
+                    cached_data = joblib.load(full_file_path)
                     
                     # Filter for requested range
                     mask = (cached_data.index >= start_timestamp) & (cached_data.index <= end_timestamp)
@@ -531,7 +556,7 @@ class FeatureStore:
                         combined_data.append(filtered_data)
                         
                 except Exception as e:
-                    print(f"Error loading cache file {metadata.file_path}: {e}")
+                    print(f"Error loading cache file {full_file_path}: {e}")
                     continue
         
         if not combined_data:
@@ -577,10 +602,12 @@ class FeatureStore:
         
         for metadata in file_metadata_list:
             try:
-                if os.path.exists(metadata.file_path):
-                    os.remove(metadata.file_path)
+                # Construct full file path from filename stored in metadata
+                full_file_path = os.path.join(self.cache_dir, metadata.file_path)
+                if os.path.exists(full_file_path):
+                    os.remove(full_file_path)
             except Exception as e:
-                print(f"Error removing cache file {metadata.file_path}: {e}")
+                print(f"Error removing cache file {full_file_path}: {e}")
         
         self.metadata.clear_symbol_metadata(symbol)
     
@@ -620,5 +647,60 @@ class FeatureStore:
                 cls._initialized = False
                 return
         raise RuntimeError("reset_instance() can only be called from a test context (pytest/unittest). Do not use in production code.")
+    
+    def load_in_memory_Features_from_metadata(self):
+        """
+        Load features from metadata into in-memory cache during initialization.
+        
+        This method loads all available feature files from the metadata into the
+        in-memory cache to improve performance for subsequent feature requests.
+        """
+        print("Loading features from metadata into memory cache...")
+        
+        # Get all symbols from metadata
+        all_symbols = list(self.metadata._metadata.keys())
+        
+        if not all_symbols:
+            print("No metadata found. Memory cache will remain empty.")
+            return
+        
+        loaded_count = 0
+        error_count = 0
+        
+        for symbol in all_symbols:
+            file_metadata_list = self.metadata.get_file_metadata(symbol)
+            
+            for metadata in file_metadata_list:
+                try:
+                    # Construct full file path from filename stored in metadata
+                    full_file_path = os.path.join(self.cache_dir, metadata.file_path)
+                    
+                    # Check if file exists
+                    if not os.path.exists(full_file_path):
+                        print(f"Warning: Cache file not found for {symbol}: {metadata.file_path}")
+                        continue
+                    
+                    # Load features from file
+                    cached_data = joblib.load(full_file_path)
+                    
+                    if cached_data is not None and not cached_data.empty:
+                        # Add to in-memory cache
+                        self._add_to_memory_cache(symbol, cached_data)
+                        loaded_count += 1
+                        print(f"Loaded {len(cached_data)} timestamps for {symbol} from {metadata.file_path}")
+                    else:
+                        print(f"Warning: Empty or invalid data for {symbol}: {metadata.file_path}")
+                        
+                except Exception as e:
+                    error_count += 1
+                    print(f"Error loading features for {symbol} from {metadata.file_path}: {e}")
+                    continue
+        
+        print(f"Memory cache loading completed: {loaded_count} files loaded, {error_count} errors")
+        
+        # Print memory cache statistics
+        total_symbols = len(self._in_memory_features)
+        total_timestamps = sum(len(data) for data in self._in_memory_features.values())
+        print(f"Memory cache stats: {total_symbols} symbols, {total_timestamps} total timestamps")
     
    

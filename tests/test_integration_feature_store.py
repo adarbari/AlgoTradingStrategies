@@ -12,7 +12,11 @@ class TestFeatureStoreIntegration(unittest.TestCase):
         self.symbol = Symbol('AAPL')
         self.start_time = datetime(2023, 1, 1, 9, 30)
         self.end_time = datetime(2023, 1, 1, 16, 0)
-        self.feature_store = FeatureStore()
+        
+        # Reset the singleton instance to ensure clean state
+        FeatureStore.reset_instance()
+        self.feature_store = FeatureStore.get_instance()
+        
         self.mock_ohlcv_df = pd.DataFrame({
             'open': [100, 101, 102],
             'high': [105, 106, 107],

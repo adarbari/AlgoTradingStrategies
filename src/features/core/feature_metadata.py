@@ -11,7 +11,7 @@ class FeatureFileMetadata:
     symbol: str
     start_timestamp: datetime
     end_timestamp: datetime
-    file_path: str
+    file_path: str  # Now stores only the filename, not the full path
     feature_count: int
     created_at: datetime
 
@@ -51,7 +51,12 @@ class FeatureStoreMetadata:
         return self._metadata.get(symbol, [])
     
     def remove_file_metadata(self, symbol: str, file_path: str):
-        """Remove metadata for a specific file."""
+        """Remove metadata for a specific file.
+        
+        Args:
+            symbol: Trading symbol
+            file_path: Filename (not full path) to remove from metadata
+        """
         if symbol in self._metadata:
             self._metadata[symbol] = [
                 meta for meta in self._metadata[symbol] 
@@ -63,4 +68,26 @@ class FeatureStoreMetadata:
         """Clear all metadata for a symbol."""
         if symbol in self._metadata:
             del self._metadata[symbol]
-            self._save_metadata() 
+            self._save_metadata()
+    
+    def migrate_to_relative_paths(self):
+        """Migrate existing metadata from absolute paths to relative filenames.
+        
+        This method converts any existing metadata that stores full file paths
+        to store only filenames, making the metadata portable.
+        """
+        migrated = False
+        for symbol in list(self._metadata.keys()):
+            for metadata in self._metadata[symbol]:
+                if os.path.isabs(metadata.file_path):
+                    # Convert absolute path to filename only
+                    old_path = metadata.file_path
+                    metadata.file_path = os.path.basename(old_path)
+                    print(f"Migrated metadata for {symbol}: {old_path} -> {metadata.file_path}")
+                    migrated = True
+        
+        if migrated:
+            self._save_metadata()
+            print("Metadata migration completed.")
+        else:
+            print("No metadata migration needed.") 
