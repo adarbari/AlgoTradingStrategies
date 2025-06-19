@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 import os
+import logging
 from typing import Optional, List
 import pandas as pd
 from polygon import RESTClient
@@ -8,6 +9,19 @@ from src.data.types.data_config_types import OHLCVConfig
 from src.data.providers.ohlcv_provider import OHLCVDataProvider
 from src.data.types.data_type import DataType
 from src.data.types.ohlcv_types import OHLCVData
+from src.utils.retry_utils import exponential_backoff_retry, RetryConfig
+
+logger = logging.getLogger(__name__)
+
+# Custom exception for rate limiting
+class PolygonRateLimitError(Exception):
+    """Exception raised when Polygon API rate limit is exceeded."""
+    pass
+
+# Custom exception for API errors
+class PolygonAPIError(Exception):
+    """Exception raised for Polygon API errors."""
+    pass
 
 class PolygonProvider(OHLCVDataProvider):
     """
@@ -35,6 +49,16 @@ class PolygonProvider(OHLCVDataProvider):
         self.api_key = api_key
         self.client = RESTClient(api_key)
         
+        # Configure retry settings for rate limiting
+        self.retry_config = RetryConfig(
+            max_retries=5,
+            base_delay=2.0,
+            max_delay=120.0,
+            exponential_base=2.0,
+            jitter=True,
+            retry_on_exceptions=[PolygonRateLimitError, PolygonAPIError, Exception]
+        )
+        
     def get_data(
         self,
         symbol: str,
@@ -43,7 +67,7 @@ class PolygonProvider(OHLCVDataProvider):
         config: Optional[OHLCVConfig] = None
     ) -> TimeSeriesData:
         """
-        Fetch OHLCV data from Polygon.io with pagination support.
+        Fetch OHLCV data from Polygon.io with pagination support and exponential backoff.
         
         Args:
             symbol: The trading symbol
@@ -71,14 +95,14 @@ class PolygonProvider(OHLCVDataProvider):
             limit = 50000  # Polygon's maximum results per request
             
             while current_from < end_time:
-                # Make API call for current batch
-                aggs_response = self.client.get_aggs(
-                    ticker=symbol,
+                # Make API call for current batch with retry logic
+                aggs_response = self._make_api_call_with_retry(
+                    symbol=symbol,
                     multiplier=multiplier,
                     timespan=timespan,
-                    from_=current_from,
-                    to=end_time,
-                    adjusted=config.adjust_splits or config.adjust_dividends,
+                    current_from=current_from,
+                    end_time=end_time,
+                    config=config,
                     limit=limit
                 )
                 
@@ -117,6 +141,76 @@ class PolygonProvider(OHLCVDataProvider):
                 ))
                 
             return TimeSeriesData(timestamps=timestamps, data=data, data_type=DataType.OHLCV)
+    
+    @exponential_backoff_retry(
+        max_retries=5,
+        base_delay=2.0,
+        max_delay=120.0,
+        exponential_base=2.0,
+        jitter=True,
+        retry_on_exceptions=[PolygonRateLimitError, PolygonAPIError, Exception]
+    )
+    def _make_api_call_with_retry(
+        self,
+        symbol: str,
+        multiplier: int,
+        timespan: str,
+        current_from: datetime,
+        end_time: datetime,
+        config: OHLCVConfig,
+        limit: int
+    ):
+        """
+        Make API call with retry logic for handling rate limits and transient errors.
+        
+        Args:
+            symbol: The trading symbol
+            multiplier: Time multiplier
+            timespan: Time span (minute, hour, day, etc.)
+            current_from: Start time for this batch
+            end_time: End time for data
+            config: OHLCV configuration
+            limit: Maximum results per request
+            
+        Returns:
+            API response from Polygon
+            
+        Raises:
+            PolygonRateLimitError: If rate limit is exceeded
+            PolygonAPIError: For other API errors
+        """
+        try:
+            logger.debug(f"Making API call for {symbol} from {current_from} to {end_time}")
+            
+            aggs_response = self.client.get_aggs(
+                ticker=symbol,
+                multiplier=multiplier,
+                timespan=timespan,
+                from_=current_from,
+                to=end_time,
+                adjusted=config.adjust_splits or config.adjust_dividends,
+                limit=limit
+            )
+            
+            return aggs_response
+            
+        except Exception as e:
+            error_msg = str(e).lower()
+            
+            # Check for rate limiting (429 errors or rate limit messages)
+            if any(keyword in error_msg for keyword in ['429', 'rate limit', 'too many requests', 'quota exceeded']):
+                logger.warning(f"Rate limit exceeded for {symbol}: {e}")
+                raise PolygonRateLimitError(f"Rate limit exceeded: {e}")
+            
+            # Check for other API errors
+            elif any(keyword in error_msg for keyword in ['api', 'http', 'server error', 'timeout']):
+                logger.warning(f"API error for {symbol}: {e}")
+                raise PolygonAPIError(f"API error: {e}")
+            
+            # For other exceptions, re-raise as is
+            else:
+                logger.error(f"Unexpected error for {symbol}: {e}")
+                raise
             
     def _parse_timeframe(self, timeframe: str) -> tuple[int, str]:
         """

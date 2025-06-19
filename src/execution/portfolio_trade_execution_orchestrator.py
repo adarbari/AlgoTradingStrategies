@@ -141,7 +141,7 @@ class PortfolioTradeExecutionOrchestrator:
             action = weighted_signal.action
             confidence = abs(weighted_signal.confidence)
             
-            if weighted_signal.confidence < 0.5:
+            if weighted_signal.confidence < 0.5 or action == 'HOLD':
                 continue
                 
             quantity = self._calculate_position_size(symbol, current_price, confidence)
