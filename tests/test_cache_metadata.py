@@ -1,4 +1,6 @@
 import unittest
+import os
+import tempfile
 from datetime import datetime, timedelta
 from src.data.cache.cache_metadata import CacheMetadata, CacheSegment
 from src.data.types.symbol import Symbol
@@ -6,11 +8,19 @@ from src.data.types.data_type import DataType
 
 class TestCacheMetadata(unittest.TestCase):
     def setUp(self):
-        self.metadata = CacheMetadata()
+        # Create a temporary file for metadata
+        self.temp_dir = tempfile.mkdtemp()
+        self.metadata_file = os.path.join(self.temp_dir, "test_cache_segments.pkl")
+        self.metadata = CacheMetadata(segment_file=self.metadata_file)
         self.symbol = Symbol("AAPL")
         self.data_type = DataType.OHLCV
         self.start_time = datetime(2023, 1, 1)
         self.end_time = datetime(2023, 1, 10)
+
+    def tearDown(self):
+        # Clean up temporary directory
+        import shutil
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_initialization(self):
         self.assertEqual(self.metadata._cache_segments, {})

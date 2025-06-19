@@ -13,7 +13,7 @@ class SplitManager:
         train_ratio: float = 0.6,
         val_ratio: float = 0.2,
         test_ratio: float = 0.2,
-        min_train_days: int = 30
+        min_train_days: int = 0
     ):
         """Initialize split manager.
         

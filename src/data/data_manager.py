@@ -77,11 +77,13 @@ class DataManager:
             end_time=end_time
         )
         
-        # If we have all the data cached, return it
+        # If we have all the data cached, try to return it
         if not missing_ranges:
-            cached_df = self.cache.get_cached_data(symbol, data_type,start_time, end_time)
-            if cached_df is not None:
-                return cached_df
+            cached_data = self.cache.get_cached_data(symbol, data_type, start_time, end_time)
+            if cached_data is not None and cached_data.timestamps:
+                return cached_data
+            # If cache is empty or None, treat as missing data and fetch from provider
+            missing_ranges = [(start_time, end_time)]
             
         # Fetch missing data ranges
         new_data = TimeSeriesData(timestamps=[], data=[], data_type=data_type)
@@ -97,7 +99,6 @@ class DataManager:
                 
                 # Cache the new data
                 if range_data.timestamps:
-                    df = pd.DataFrame(range_data.data, index=range_data.timestamps)
                     self.cache.cache_data(
                         symbol=symbol,
                         data_type=data_type,
@@ -106,9 +107,10 @@ class DataManager:
                         data=range_data
                     )
         
-        # Get cached data for the entire range
+        # Get cached data for the entire range and merge with new data
         cached_data = self.cache.get_cached_data(symbol, data_type, start_time, end_time)
-        new_data = self._merge_data(cached_data, new_data)
+        if cached_data is not None:
+            new_data = self._merge_data(cached_data, new_data)
         
         return new_data
     

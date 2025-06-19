@@ -40,7 +40,7 @@ class SmartCache(Generic[T]):
         """
         self.cache_dir = cache_dir
         self.memory_cache: Dict[SegmentID, TimeSeriesData] = {}
-        self.metadata = CacheMetadata()
+        self.metadata = CacheMetadata(segment_file=os.path.join(cache_dir, "cache_segments.pkl"))
         
         # Create cache directory if it doesn't exist
         os.makedirs(cache_dir, exist_ok=True)

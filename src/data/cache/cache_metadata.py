@@ -204,9 +204,12 @@ class CacheMetadata:
             
         segments = self._cache_segments[symbol][data_type]
         for segment in segments:
-            if ((start_time <= segment.start_time <= end_time) or  # incoming start time is in middle of segment
-                (start_time <= segment.end_time <= end_time) or    # incoming end time is in middle of segment
-                (segment.start_time <= start_time and segment.end_time >= end_time)):  # segment completely contains incoming range
+            # Check for actual overlap (not just adjacency)
+            # Two segments overlap if:
+            # 1. One segment starts before the other ends AND ends after the other starts
+            # 2. But we allow adjacency (where one segment ends exactly where another begins)
+            if ((start_time < segment.end_time and end_time > segment.start_time) or  # Actual overlap
+                (segment.start_time < end_time and segment.end_time > start_time)):   # Reverse overlap
                 return True
                 
         return False 
