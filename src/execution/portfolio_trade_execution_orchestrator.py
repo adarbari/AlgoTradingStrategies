@@ -215,7 +215,7 @@ class PortfolioTradeExecutionOrchestrator:
             if success:
                 logger.info("Successfully executed %s trade for %s", trade.action, trade.symbol)
                 # Log the trade to CSV
-                portfolio_value = self.portfolio_manager.get_portfolio_value()
+                portfolio_value = self.portfolio_manager.get_portfolio_value(self.current_prices)
                 cash = self.portfolio_manager.cash
                 self.trading_logger.log_trade(
                     symbol=trade.symbol,
@@ -231,7 +231,8 @@ class PortfolioTradeExecutionOrchestrator:
             return success
             
         except Exception as e:
-            logger.error("Error executing trade for %s: %s", trade.symbol, str(e))
+            logger.error("Error executing trade for %s: %s", trade.symbol, str(e), exc_info=True)
+            raise
             return False
 
     def execute_trade(self, trade: Trade) -> None:

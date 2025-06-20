@@ -75,6 +75,18 @@ class FeatureStore:
         Returns:
             DataFrame with requested features
         """
+        # Check if features already exist in cache for this symbol and time range
+        cached_features = self.get_features(symbol, start_time, end_time)
+        if cached_features is not None and not cached_features.empty:
+            # If specific features are requested, filter the cached features
+            if feature_names is not None:
+                available_features = [f for f in feature_names if f in cached_features.columns]
+                if available_features:
+                    return cached_features[available_features]
+            else:
+                # Return all cached features if no specific features requested
+                return cached_features
+
         # If no specific features requested, generate all available
         if feature_names is None:
             feature_names = list(self._feature_mapping.keys())
@@ -317,29 +329,6 @@ class FeatureStore:
             return self._feature_mapping[feature_name].get('category')
         return None
     
-    def generate_features_by_category(self, symbol: Symbol, start_time: datetime, end_time: datetime, 
-                                    categories: List[str]) -> pd.DataFrame:
-        """
-        Generate features by category.
-        
-        Args:
-            symbol: Trading symbol
-            start_time: Start timestamp
-            end_time: End timestamp
-            categories: List of categories to generate features for
-            
-        Returns:
-            DataFrame with features from the specified categories
-        """
-        categories_map = self.get_features_by_category()
-        feature_names = []
-        
-        for category in categories:
-            if category in categories_map:
-                feature_names.extend(categories_map[category])
-        
-        return self.generate_features(symbol, start_time, end_time, feature_names)
-    
     def add_feature_mapping(self, feature_name: str, data_type: DataType, method: str, 
                            feature_type: FeatureType = FeatureType.DERIVED,
                            engine_type: Optional[FeatureCalculationEngineType] = None,
@@ -373,27 +362,6 @@ class FeatureStore:
             feature_mapping['depends_on'] = depends_on
         
         self._feature_mapping[feature_name] = feature_mapping
-    
-    def generate_feature(self, symbol: Symbol, feature_names: List[str], timestamp: datetime) -> Optional[pd.DataFrame]:
-        """
-        Generate features for a specific timestamp.
-        
-        Args:
-            symbol: Trading symbol
-            feature_names: List of feature names to generate
-            timestamp: Specific timestamp to generate features for
-            
-        Returns:
-            DataFrame with features for the timestamp or None if data unavailable
-        """
-        # Generate features for this timestamp using the main function
-        features_df = self.generate_features(symbol, timestamp, timestamp, feature_names)
-        
-        # Return the specific timestamp if available
-        if not features_df.empty and timestamp in features_df.index:
-            return features_df.loc[[timestamp]]
-        
-        return None
     
     def store_features_in_metadata(self, symbol: Symbol, features_df: pd.DataFrame, 
                       start_timestamp: datetime, end_timestamp: datetime) -> str:

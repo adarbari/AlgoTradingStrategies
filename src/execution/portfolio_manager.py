@@ -41,7 +41,7 @@ class PortfolioManager:
     def get_portfolio_value(self, current_prices: Dict[str, float]) -> float:
         """Calculate the total portfolio value."""
         positions_value = sum(
-            self.positions[symbol]['quantity'] * current_prices[symbol]
+            self.positions[symbol]['quantity'] * current_prices.get(symbol, 0)
             for symbol in self.positions
         )
         return self.cash + positions_value

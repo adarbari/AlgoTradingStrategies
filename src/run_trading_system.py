@@ -168,14 +168,9 @@ class TradingSystem:
         """Get current prices for all symbols."""
         prices = {}
         for symbol, data in self.historical_data.items():
-            # TimeSeriesData stores timestamps in the .timestamps attribute (a list of datetime)
-            # To find the index of the given timestamp:
-            try:
+            if timestamp in data.timestamps:
                 idx = data.timestamps.index(timestamp)
                 prices[symbol] = data.data[idx].close
-            except ValueError:
-                logger.error(f"Timestamp {timestamp} not found in data for symbol {symbol}")
-                continue
         return prices
         
     def _get_current_features(self, timestamp: datetime, split_data: Dict[str, TimeSeriesData]) -> Dict[str, Dict[str, float]]:
@@ -215,6 +210,11 @@ class TradingSystem:
         for data in split_data.values():
             all_timestamps.update(data.timestamps)
         timestamps = sorted(list(all_timestamps))
+        
+        # Debug: Print timestamps being processed
+        logger.debug(f"Processing {len(timestamps)} timestamps in split '{split_name}'")
+        logger.debug(f"First 5 timestamps: {timestamps[:5]}")
+        logger.debug(f"Last 5 timestamps: {timestamps[-5:]}")
         
         # Run simulation
         for timestamp in timestamps:
@@ -344,7 +344,7 @@ def main():
                 logger.info(f"{symbol}: {position['quantity']} shares at ${position['avg_price']:.2f}")
                 
     except Exception as e:
-        logger.error(f"Error running trading system: {str(e)}")
+        logger.error(f"Error running trading system: {str(e)}", exc_info=True)
         raise
 
 if __name__ == "__main__":
