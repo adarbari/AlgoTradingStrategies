@@ -1,6 +1,7 @@
-"""Rithmic API integration package."""
+"""
+Rithmic data provider implementation.
+"""
 
-from .protocol import RithmicProtocol
-from .provider import RithmicProvider
+from .rithmic_provider import RithmicProvider
 
-__all__ = ['RithmicProtocol', 'RithmicProvider'] 
+__all__ = ['RithmicProvider'] 
